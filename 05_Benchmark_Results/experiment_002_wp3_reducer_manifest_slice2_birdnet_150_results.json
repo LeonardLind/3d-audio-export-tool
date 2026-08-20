@@ -1,0 +1,112 @@
+{
+  "experiment": "Experiment 002 - WP3 Raw Spectrogram Reducer Benchmark",
+  "date_run": "2026-07-20",
+  "manifest": "manifest_slice2_birdnet_150.csv",
+  "manifest_rows": 150,
+  "feature_type": "Raw flattened spectrograms",
+  "input_dimensions": 15677,
+  "dimensionality_method": "Use the dimensionality required by raw spectrogram PCA to retain at least 95% explained variance for this manifest, unless --dimensions is explicitly supplied.",
+  "output_dimensions": 106,
+  "pca_auto95_explained_variance_total": 0.9515387952026285,
+  "reducers": [
+    "PCA",
+    "UMAP",
+    "t-SNE"
+  ],
+  "trustworthiness_k": 5,
+  "negative_control_rule": "Pass if real trustworthiness exceeds matched random-control trustworthiness by at least 0.02.",
+  "random_seed_base": 20260720,
+  "reducer_parameters": {
+    "PCA": {
+      "components": 106
+    },
+    "UMAP": {
+      "nComponents": 106,
+      "nNeighbors": 5,
+      "minDist": 0.1,
+      "spread": 1
+    },
+    "t-SNE": {
+      "dim": 106,
+      "perplexity": 5,
+      "earlyExaggeration": 4,
+      "learningRate": 100,
+      "nIter": 1000
+    }
+  },
+  "label_exclusion_verification": "Labels remain manifest metadata only; reducer inputs and trustworthiness scoring use raw spectrogram numeric features only.",
+  "results": [
+    {
+      "reducer": "PCA",
+      "feature_type": "Raw flattened spectrograms",
+      "rows": 150,
+      "input_dimensions": 15677,
+      "output_dimensions": 106,
+      "real_trustworthiness": 0.9837652582159624,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20261021,
+      "negative_control_trustworthiness": 0.9627887323943662,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.020976525821596148,
+      "negative_control_pass": true,
+      "reducer_details": {
+        "real": {},
+        "control": {}
+      }
+    },
+    {
+      "reducer": "UMAP",
+      "feature_type": "Raw flattened spectrograms",
+      "rows": 150,
+      "input_dimensions": 15677,
+      "output_dimensions": 106,
+      "real_trustworthiness": 0.7617464788732394,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20261022,
+      "negative_control_trustworthiness": 0.6993427230046949,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.06240375586854452,
+      "negative_control_pass": true,
+      "reducer_details": {
+        "real": {},
+        "control": {}
+      }
+    },
+    {
+      "reducer": "t-SNE",
+      "feature_type": "Raw flattened spectrograms",
+      "rows": 150,
+      "input_dimensions": 15677,
+      "output_dimensions": 106,
+      "real_trustworthiness": 0.40164319248826297,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20261023,
+      "negative_control_trustworthiness": 0.3434084507042253,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.05823474178403765,
+      "negative_control_pass": true,
+      "reducer_details": {
+        "real": {
+          "error": 28.803051610361756,
+          "iterations": 3
+        },
+        "control": {
+          "error": 29.068547978558392,
+          "iterations": 3
+        }
+      }
+    }
+  ],
+  "decision": {
+    "eligible_reducers": [
+      "PCA",
+      "UMAP",
+      "t-SNE"
+    ],
+    "best_real_trustworthiness": 0.9837652582159624,
+    "carried_forward": [
+      "PCA"
+    ],
+    "tie_band": 0.02
+  }
+}

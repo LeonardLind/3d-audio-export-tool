@@ -1,0 +1,10 @@
+{
+  "method": "pca",
+  "dimensions": 20,
+  "pca": {},
+  "umap": {
+    "nNeighbors": 5,
+    "minDist": 0.1,
+    "spread": 1.0
+  }
+}

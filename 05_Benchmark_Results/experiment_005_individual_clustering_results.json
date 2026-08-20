@@ -1,0 +1,50 @@
+{
+  "experiment": "Experiment 005 - Same-Individual Clustering Failure-Criteria Test",
+  "date_run": "2026-07-20",
+  "adopted_method": "raw flattened spectrograms + PCA",
+  "failure_criterion": "Repeated recordings of the same individual/song do not cluster together more closely than recordings of different individuals.",
+  "manifest": "manifest_experiment_005_individual_validation.csv",
+  "source_dataset": "Assets/slice_2_acoustic_data",
+  "selected_individuals": [
+    {
+      "individual_id": "4_2MM06988",
+      "eligible_recordings": 2018
+    },
+    {
+      "individual_id": "1_2MM06956",
+      "eligible_recordings": 31
+    }
+  ],
+  "balanced_recordings_per_individual": 31,
+  "rows": 62,
+  "one_clip_per_recording": true,
+  "feature_dimensions": 15677,
+  "pca_components_auto95": 46,
+  "pca_explained_variance_total": 0.9506038001450633,
+  "trustworthiness_k": 5,
+  "trustworthiness": 0.9673835125448029,
+  "distance_test": {
+    "same_pairs": 930,
+    "different_pairs": 961,
+    "same_mean_distance": 155.98491188484277,
+    "different_mean_distance": 166.38272660195258,
+    "same_median_distance": 158.02047459547347,
+    "different_median_distance": 155.8340012782763,
+    "mean_distance_delta": 10.39781471710981,
+    "median_distance_delta": -2.1864733171971693,
+    "mean_distance_ratio": 0.9375066454946064
+  },
+  "nearest_neighbor_same_individual_rate": 0.6290322580645161,
+  "expected_balanced_nearest_neighbor_baseline": 0.5,
+  "permutation_test": {
+    "permutations": 1000,
+    "p_value_greater_equal": 0.000999000999000999,
+    "shuffled_delta_mean": -0.0029542066010293127,
+    "shuffled_delta_median": -0.261559632505282
+  },
+  "decision": {
+    "same_individual_closer": true,
+    "passes_initial_failure_criterion_check": true,
+    "caveat": "Only two recorder/individual IDs were available locally/S3 under the tested prefix; this test may still reflect recorder/site/species/recording-condition effects rather than true biological individual identity."
+  }
+}

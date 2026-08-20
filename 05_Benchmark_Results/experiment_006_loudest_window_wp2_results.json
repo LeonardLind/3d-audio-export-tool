@@ -1,0 +1,76 @@
+{
+  "experiment": "Experiment 006 - Loudest 1s Window Selection WP2 Retest",
+  "date_run": "2026-07-20",
+  "manifest": "manifest_slice2_birdnet_150.csv",
+  "manifest_rows": 150,
+  "window_rule": "For each manifest row, search the full BirdNET detection interval start_time to end_time and select the 1000 ms sub-window with highest RMS using a 100 ms hop.",
+  "selected_windows_csv": "05_Benchmark_Results/experiment_006_loudest_windows.csv",
+  "pca_component_rule": "Auto PCA to >= 0.95 cumulative explained variance for each feature matrix.",
+  "primary_metric": "trustworthiness",
+  "trustworthiness_k": 5,
+  "negative_control_threshold": "Pass if real trustworthiness exceeds matched random-control trustworthiness by at least 0.02.",
+  "random_seed_base": 20260720,
+  "previous_fixed_start_raw_spectrogram_trustworthiness": 0.9837652582159624,
+  "new_loudest_window_raw_spectrogram_trustworthiness": 0.9809295774647887,
+  "raw_spectrogram_trustworthiness_delta": -0.002835680751173686,
+  "results": [
+    {
+      "feature_type": "MFCCs",
+      "rows": 150,
+      "dimensions": 26,
+      "pca_components": 13,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.9975492957746479,
+      "negative_control_seed": 20260721,
+      "negative_control_trustworthiness": 0.9944694835680751,
+      "negative_control_margin": 0.0030798122065728295,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_pass": false,
+      "random_pca_components": 23,
+      "random_explained_variance_total": 0.9535827236816536,
+      "explained_variance_total": 0.9568745550811243
+    },
+    {
+      "feature_type": "Inherited 8-axis spectral descriptors",
+      "rows": 150,
+      "dimensions": 8,
+      "pca_components": 5,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.997774647887324,
+      "negative_control_seed": 20260722,
+      "negative_control_trustworthiness": 1,
+      "negative_control_margin": -0.002225352112676049,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_pass": false,
+      "random_pca_components": 8,
+      "random_explained_variance_total": 1.0000022564421729,
+      "explained_variance_total": 0.9754590941037005
+    },
+    {
+      "feature_type": "Raw flattened spectrograms",
+      "rows": 150,
+      "dimensions": 15677,
+      "pca_components": 88,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.9809295774647887,
+      "negative_control_seed": 20260723,
+      "negative_control_trustworthiness": 0.9161596244131456,
+      "negative_control_margin": 0.06476995305164313,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_pass": true,
+      "random_pca_components": 141,
+      "random_explained_variance_total": 0.9552922921347096,
+      "explained_variance_total": 0.9501247550137751
+    }
+  ],
+  "decision": {
+    "eligible_candidates": [
+      "Raw flattened spectrograms"
+    ],
+    "carried_forward": [
+      "Raw flattened spectrograms"
+    ],
+    "best_real_trustworthiness": 0.9809295774647887,
+    "d010_change": "No change: raw flattened spectrograms remain the only candidate to pass the fair negative-control rule."
+  }
+}

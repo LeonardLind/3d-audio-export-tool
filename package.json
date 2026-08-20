@@ -1,0 +1,27 @@
+{
+  "name": "birdsong_project",
+  "version": "1.0.0",
+  "description": "This structure marks the transition from framework-writing to evidence-gathering. If you're picking this project back up after a break, or handing it to a new collaborator (human or AI), start here.",
+  "main": "index.js",
+  "scripts": {
+    "benchmark:wp3": "node tools/run_experiment_002_wp3_reducer_benchmark.js",
+    "benchmark:exp005": "node tools/run_experiment_005_individual_clustering.js",
+    "benchmark:exp006": "node tools/run_experiment_006_loudest_window_wp2.js",
+    "reduce": "node tools/apply_reducer.js",
+    "export:viz": "node tools/export_visualization_dataset.js",
+    "export:recording": "node tools/export_single_recording_dataset.js",
+    "export:sample": "node tools/export_sample_recording.js",
+    "behavior": "node tools/build_behavior_comparison.js",
+    "diagnose:external": "node tools/diagnose_external_recording.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "onnxruntime-node": "^1.27.0",
+    "tsne-js": "^1.0.3",
+    "umap-js": "^1.4.0"
+  }
+}

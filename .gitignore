@@ -1,0 +1,51 @@
+node_modules/
+app/node_modules/
+
+# Build output
+dist/
+app/dist/
+
+# Local/generated visualization data and audio assets
+Assets/
+sample-test-audio/
+app/public/assets/
+app/public/data/*.json
+!app/public/data/.gitkeep
+05_Benchmark_Results/spot_checks/
+05_Benchmark_Results/spot_checks_exp006_loudest/
+
+# Downloaded model weights and labels. tools/lib/birdnet.js fetches them on demand.
+tools/models/
+
+# Logs and local machine files
+*.log
+*.local
+.DS_Store
+.vscode/
+.idea/
+.claude/
+.mcp.json
+
+# Accidental scratch files created from pasted console snippets
+0.5
+6s
+a
+a+b
+a.emissionTime
+console.log(p.emissionTime.toFixed(2)
+document.querySelector('audio').currentTime)
+document.querySelector('audio').pause())
+document.querySelector('audio').readyState)
+f.toLowerCase().endsWith('.csv')
+feature-space
+\[Math.min(...a)
+Math.abs(data.points\[a\].emissionTime
+p.amplitude)
+p.colorT)))
+p.spectralCentroidHz)
+PCA
+point.rawFeature)
+{const
+app/(a.timestampMs
+app/PCA
+app/{const

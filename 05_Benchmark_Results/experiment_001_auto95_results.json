@@ -1,0 +1,118 @@
+{
+  "experiment": "Experiment 001 - Feature Set Benchmark",
+  "manifest": "manifest_birdnet_first_test.csv",
+  "manifest_rows": 22,
+  "window_seconds": 1,
+  "window_rule": "For each manifest row, use the first fixed 1000 ms audio window starting at start_time.",
+  "reducer": "PCA",
+  "pca_components": null,
+  "pca_component_rule": "Use the smallest component count that reaches at least 0.95 cumulative explained variance for each feature matrix.",
+  "primary_metric": "trustworthiness",
+  "trustworthiness_k": 5,
+  "negative_control_threshold": "Pass if real trustworthiness exceeds matched random-control trustworthiness by at least 0.02.",
+  "random_seed_base": 20260720,
+  "label_exclusion_verification": "Manifest labels are retained only as row metadata; feature matrices passed into scaling, PCA, and trustworthiness contain audio-derived numeric features only.",
+  "results": [
+    {
+      "feature_type": "MFCCs",
+      "rows": 22,
+      "dimensions": 26,
+      "pca_mode": "auto components to >= 0.95 explained variance",
+      "pca_components": 7,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.9993506493506493,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20260721,
+      "negative_control_trustworthiness": 0.9928571428571429,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.00649350649350644,
+      "negative_control_pass": false,
+      "random_pca_components": 14,
+      "random_explained_variance_total": 0.9517549258944294,
+      "explained_variance_ratio": [
+        0.49016570557910605,
+        0.24175051845661485,
+        0.12267047586787817,
+        0.047450888175819696,
+        0.024630824771324434,
+        0.018218445463949767,
+        0.01648206856850247
+      ],
+      "explained_variance_total": 0.9613689268831953
+    },
+    {
+      "feature_type": "Inherited 8-axis spectral descriptors",
+      "rows": 22,
+      "dimensions": 8,
+      "pca_mode": "auto components to >= 0.95 explained variance",
+      "pca_components": 3,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.9980519480519481,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20260722,
+      "negative_control_trustworthiness": 0.9954545454545455,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.0025974025974025983,
+      "negative_control_pass": false,
+      "random_pca_components": 7,
+      "random_explained_variance_total": 0.9752579366713481,
+      "explained_variance_ratio": [
+        0.8702870706102137,
+        0.06019247216958121,
+        0.05051814463874555
+      ],
+      "explained_variance_total": 0.9809976874185405
+    },
+    {
+      "feature_type": "Raw flattened spectrograms",
+      "rows": 22,
+      "dimensions": 15677,
+      "pca_mode": "auto components to >= 0.95 explained variance",
+      "pca_components": 20,
+      "trustworthiness_k": 5,
+      "real_trustworthiness": 0.9954545454545455,
+      "negative_control_type": "seeded Gaussian random data with matched row count and feature dimensionality",
+      "negative_control_seed": 20260723,
+      "negative_control_trustworthiness": 0.8116883116883117,
+      "negative_control_threshold": "real - control >= 0.02",
+      "negative_control_margin": 0.1837662337662338,
+      "negative_control_pass": true,
+      "random_pca_components": 20,
+      "random_explained_variance_total": 0.9558350168098749,
+      "explained_variance_ratio": [
+        0.09060077874842533,
+        0.08052042073578843,
+        0.07111171482337715,
+        0.06926292523393524,
+        0.06238098420155721,
+        0.058725248458660916,
+        0.053174353134664364,
+        0.04971879794817633,
+        0.04636143395115306,
+        0.04404124654575592,
+        0.043889318796432014,
+        0.040239860136756456,
+        0.038395909275394276,
+        0.036541194720433226,
+        0.03480842170941224,
+        0.03346675510823101,
+        0.031026618550360274,
+        0.030239969559041124,
+        0.02928489435066378,
+        0.028328929687387754
+      ],
+      "explained_variance_total": 0.9721197756756063
+    }
+  ],
+  "decision": {
+    "eligible_candidates": [
+      "Raw flattened spectrograms"
+    ],
+    "best_real_trustworthiness": 0.9954545454545455,
+    "carried_forward": [
+      "Raw flattened spectrograms"
+    ],
+    "tie_band": 0.02,
+    "raw_spectrogram_note": "If raw flattened spectrograms lose this PCA-only pass, that loss is provisional until the planned WP3 UMAP retest."
+  }
+}
