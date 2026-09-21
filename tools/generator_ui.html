@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acoustic Asset Generator</title>
+    <style>
+      :root {
+        --bg: #06070d;
+        --panel: #0d1018;
+        --line: #1e232f;
+        --text: #e6e9f0;
+        --muted: #8a90a0;
+        --accent: #6ea8ff;
+        --ok: #4ec9a0;
+        --warn: #e0b050;
+        --err: #ff6b6b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        padding: 24px;
+      }
+      h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: 0.02em; }
+      .sub { color: var(--muted); margin: 0 0 20px; font-size: 12px; }
+      .layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
+      @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+      .panel + .panel { margin-top: 14px; }
+      .panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+      label { display: block; font-size: 11px; color: var(--muted); margin: 10px 0 4px; }
+      input[type="text"], input[type="number"], select {
+        width: 100%; background: #05060b; color: var(--text);
+        border: 1px solid var(--line); border-radius: 5px; padding: 7px 8px; font: inherit;
+      }
+      input[type="file"] { width: 100%; color: var(--muted); font: inherit; }
+      button {
+        background: var(--accent); color: #04060d; border: 0; border-radius: 5px;
+        padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; margin-top: 14px; width: 100%;
+      }
+      button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .row { display: flex; gap: 8px; }
+      .row > * { flex: 1; }
+      .check { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+      .check input { width: auto; }
+      .status { margin-top: 12px; font-size: 12px; min-height: 18px; }
+      .status.busy { color: var(--accent); }
+      .status.ok { color: var(--ok); }
+      .status.err { color: var(--err); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+      .stat { background: #05060b; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; }
+      .stat .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      .stat .v { font-size: 15px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat .v small { font-size: 11px; color: var(--muted); }
+      ul.msgs { margin: 0; padding-left: 18px; }
+      ul.msgs li { margin: 4px 0; }
+      ul.msgs li.warn { color: var(--warn); }
+      ul.msgs li.err { color: var(--err); }
+      table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+      th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); }
+      th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+      audio { width: 100%; margin-top: 4px; }
+      svg { display: block; width: 100%; height: auto; }
+      .note { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
+      .hidden { display: none; }
+      code { background: #05060b; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1>Acoustic Asset Generator</h1>
+    <p class="sub">
+      Select a recording, run the analysis, check the preview, then save the package. Processing runs
+      server-side through the same pipeline as <code>npm run generate</code>.
+    </p>
+
+    <div class="layout">
+      <div>
+        <div class="panel">
+          <h2>1 · Input</h2>
+          <label for="file">Audio recording</label>
+          <input type="file" id="file" />
+          <p class="note" id="formats">Loading supported formats…</p>
+
+          <label for="species">Species / caption</label>
+          <input type="text" id="species" placeholder="e.g. Common Wood Pigeon" />
+
+          <label for="assetId">Asset id <span style="opacity:0.6">(optional)</span></label>
+          <input type="text" id="assetId" placeholder="derived from filename" />
+
+          <div class="row">
+            <div>
+              <label for="rate">Analysis rate (Hz)</label>
+              <select id="rate">
+                <option value="">22050 — default</option>
+                <option value="32000">32000 — to 16 kHz</option>
+                <option value="44100">44100 — to 22 kHz</option>
+                <option value="48000">48000 — to 24 kHz</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="check">
+            <input type="checkbox" id="birdnet" checked />
+            <label for="birdnet" style="margin:0">Run BirdNET species classification</label>
+          </div>
+
+          <button id="run" disabled>Run analysis</button>
+          <div class="status" id="status"></div>
+        </div>
+
+        <div class="panel hidden" id="savePanel">
+          <h2>3 · Export</h2>
+          <label for="profile">Profile</label>
+          <select id="profile">
+            <option value="app">app — for upload to XP Acoustics (small)</option>
+            <option value="full">full — everything, for the local viewer</option>
+          </select>
+          <p class="note">
+            <b>app</b> ships only the fields the XP Acoustics screen reads, minified — typically
+            a tenth the size, which matters because that screen fetches this file over the
+            network per clip. <b>full</b> also keeps the spectrogram, chromagram, per-frame
+            descriptors and the sandbox analyses, which only the local viewer reads.
+          </p>
+          <button id="save">Save package</button>
+          <button id="savePublish" class="secondary">Save + open in local viewer</button>
+          <p class="note" id="savePath"></p>
+        </div>
+      </div>
+
+      <div id="preview" class="hidden">
+        <div class="panel">
+          <h2>2 · Result</h2>
+          <div class="grid" id="stats"></div>
+          <p class="note" id="pipelineNote"></p>
+        </div>
+
+        <div class="panel">
+          <h2>Spectral centroid</h2>
+          <div id="centroidGraph"></div>
+          <p class="note" id="graphNote"></p>
+        </div>
+
+        <div class="panel">
+          <h2>Playback (audio as analyzed)</h2>
+          <audio id="player" controls preload="metadata"></audio>
+        </div>
+
+        <div class="panel hidden" id="birdnetPanel">
+          <h2>BirdNET detections</h2>
+          <table>
+            <thead><tr><th>Common name</th><th>Scientific</th><th>Conf.</th><th>At</th></tr></thead>
+            <tbody id="birdnetRows"></tbody>
+          </table>
+        </div>
+
+        <div class="panel" id="validationPanel">
+          <h2>Validation</h2>
+          <div id="validation"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const el = (id) => document.getElementById(id);
+      let latest = null;
+
+      fetch("/api/config")
+        .then((r) => r.json())
+        .then((cfg) => {
+          el("formats").textContent = `Supported: ${cfg.supportedExtensions.join(" ")}`;
+          el("file").accept = cfg.supportedExtensions.join(",");
+        });
+
+      el("file").addEventListener("change", () => {
+        const file = el("file").files[0];
+        el("run").disabled = !file;
+        setStatus(file ? `Selected: ${file.name} (${(file.size / 1048576).toFixed(1)} MB)` : "", "");
+      });
+
+      function setStatus(text, cls) {
+        el("status").textContent = text;
+        el("status").className = `status ${cls}`;
+      }
+
+      el("run").addEventListener("click", async () => {
+        const file = el("file").files[0];
+        if (!file) return;
+        el("run").disabled = true;
+        el("savePanel").classList.add("hidden");
+        setStatus("Analyzing… (decode → STFT → descriptors → PCA" + (el("birdnet").checked ? " → BirdNET)" : ")"), "busy");
+
+        // Percent-encoded: HTTP header values are latin-1, and these filenames are routinely
+        // non-ASCII (e.g. "ringduva - Columba palumbus.wav" arrives fine, "fågelsång.wav"
+        // does not). The server decodes it back.
+        const headers = { "x-filename": encodeURIComponent(file.name) };
+        if (el("species").value) headers["x-species"] = encodeURIComponent(el("species").value);
+        if (el("assetId").value) headers["x-asset-id"] = encodeURIComponent(el("assetId").value);
+        if (el("rate").value) headers["x-analysis-rate"] = el("rate").value;
+        if (!el("birdnet").checked) headers["x-birdnet"] = "0";
+
+        try {
+          const response = await fetch("/api/analyze", { method: "POST", headers, body: file });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          latest = result;
+          render(result);
+          const bad = !result.validation.ok;
+          setStatus(bad ? "Analysis finished, but validation failed — see below." : "Analysis complete.", bad ? "err" : "ok");
+          el("savePanel").classList.remove("hidden");
+          el("save").disabled = bad;
+          el("savePublish").disabled = bad;
+          el("savePath").textContent = `Target: ${result.packageDir}`;
+        } catch (err) {
+          setStatus(`Failed: ${err.message}`, "err");
+        } finally {
+          el("run").disabled = false;
+        }
+      });
+
+      function stat(k, v, unit) {
+        return `<div class="stat"><div class="k">${k}</div><div class="v">${v}${unit ? ` <small>${unit}</small>` : ""}</div></div>`;
+      }
+
+      function render(result) {
+        const s = result.summary;
+        const range = s.frequencyRange;
+        el("stats").innerHTML = [
+          stat("Duration", s.durationSeconds.toFixed(2), "s"),
+          stat("Points", s.pointCount),
+          stat("Frames", s.frameCount, `@ ${(s.hopSeconds * 1000).toFixed(1)} ms`),
+          stat("Analysis rate", s.analysisSampleRateHz, "Hz"),
+          stat("Usable band", `0–${(range.maxHz / 1000).toFixed(2)}`, "kHz"),
+          stat("Max centroid", (s.centroidMaxHz / 1000).toFixed(2), "kHz"),
+          stat("PCA variance", (s.pcaExplainedVarianceTotal * 100).toFixed(1), "%"),
+          stat("Syllables", s.syllableCount ?? "—", s.repetitionRate != null ? `${s.repetitionRate}/s` : ""),
+        ].join("");
+
+        el("pipelineNote").textContent =
+          `Source ${result.source.filename} · ${result.source.sampleRateHz} Hz · ${result.source.channels}ch · ` +
+          `${result.source.codec} · analysis Nyquist ${range.analysisNyquistHz} Hz` +
+          (range.bandLimited ? ` · band-limited: source only reaches ${range.sourceNyquistHz} Hz` : "");
+
+        drawCentroid(result.spectralCentroid, range, s.durationSeconds);
+        el("graphNote").textContent =
+          `${result.spectralCentroid.length} of ${s.frameCount} frames shown; the export keeps every frame. ` +
+          `Y axis scaled to frequencyRange.maxHz (${range.maxHz} Hz), not a fixed range.`;
+
+        el("player").src = `/api/preview-audio?t=${Date.now()}`;
+
+        if (result.birdnet && result.birdnet.length) {
+          el("birdnetRows").innerHTML = result.birdnet
+            .map((d) => `<tr><td>${d.commonName}</td><td><em>${d.scientificName}</em></td><td>${d.confidence.toFixed(3)}</td><td>${d.atSeconds}s</td></tr>`)
+            .join("");
+          el("birdnetPanel").classList.remove("hidden");
+        } else {
+          el("birdnetPanel").classList.add("hidden");
+        }
+
+        const messages = [
+          ...result.validation.errors.map((m) => `<li class="err">${m}</li>`),
+          ...result.validation.warnings.map((m) => `<li class="warn">${m}</li>`),
+        ];
+        el("validation").innerHTML = messages.length
+          ? `<ul class="msgs">${messages.join("")}</ul>`
+          : `<span style="color:var(--ok)">All checks passed.</span>`;
+
+        el("preview").classList.remove("hidden");
+      }
+
+      // Plots the exported per-frame spectral centroid series. The Y axis is scaled to
+      // frequencyRange.maxHz from the export, which is the point: the same code renders a
+      // 0-8 kHz recording and a 0-24 kHz one correctly without knowing anything in advance.
+      function drawCentroid(series, range, duration) {
+        const W = 900, H = 260, PAD = { l: 52, r: 12, t: 10, b: 30 };
+        const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+        const xOf = (t) => PAD.l + (duration > 0 ? t / duration : 0) * pw;
+        const yOf = (hz) => PAD.t + ph - Math.min(1, hz / range.maxHz) * ph;
+        const path = series.map(([t, hz], i) => `${i ? "L" : "M"}${xOf(t).toFixed(1)},${yOf(hz).toFixed(1)}`).join("");
+
+        const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+          const hz = f * range.maxHz;
+          return `<line x1="${PAD.l}" y1="${yOf(hz)}" x2="${W - PAD.r}" y2="${yOf(hz)}" stroke="#1e232f"/>
+                  <text x="${PAD.l - 8}" y="${yOf(hz) + 3.5}" fill="#8a90a0" font-size="10" text-anchor="end">${(hz / 1000).toFixed(1)}</text>`;
+        }).join("");
+
+        const xTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+          const t = f * duration;
+          return `<text x="${xOf(t)}" y="${H - 10}" fill="#8a90a0" font-size="10" text-anchor="middle">${t.toFixed(1)}s</text>`;
+        }).join("");
+
+        // A band-limited source cannot carry signal above its own Nyquist; shading that
+        // region keeps the graph honest about which part of the axis is measured.
+        const deadBand = range.bandLimited && range.sourceNyquistHz < range.maxHz
+          ? `<rect x="${PAD.l}" y="${PAD.t}" width="${pw}" height="${yOf(range.sourceNyquistHz) - PAD.t}" fill="#ff6b6b" opacity="0.07"/>`
+          : "";
+
+        el("centroidGraph").innerHTML = `
+          <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Spectral centroid over time">
+            ${yTicks}${deadBand}
+            <path d="${path}" fill="none" stroke="#6ea8ff" stroke-width="1.3"/>
+            <line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t + ph}" stroke="#2a2f3a"/>
+            <line x1="${PAD.l}" y1="${PAD.t + ph}" x2="${W - PAD.r}" y2="${PAD.t + ph}" stroke="#2a2f3a"/>
+            ${xTicks}
+            <text x="14" y="${PAD.t + ph / 2}" fill="#8a90a0" font-size="10" text-anchor="middle" transform="rotate(-90 14 ${PAD.t + ph / 2})">kHz</text>
+          </svg>`;
+      }
+
+      async function save(publish) {
+        const buttons = [el("save"), el("savePublish")];
+        buttons.forEach((b) => (b.disabled = true));
+        // The local viewer's panels read fields the app profile drops, so publishing an
+        // app-profile export would load with empty panels. Say so rather than doing it.
+        const profile = publish ? "full" : el("profile").value;
+        if (publish && el("profile").value === "app") {
+          setStatus("Publishing uses the full profile — the local viewer's panels need those fields.", "busy");
+        }
+        setStatus(publish ? "Saving and publishing…" : `Saving package (${profile})…`, "busy");
+        try {
+          const params = new URLSearchParams({ profile });
+          if (publish) params.set("publish", "1");
+          const response = await fetch(`/api/save?${params}`, { method: "POST" });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          const upload = result.upload
+            ? `<br><br>Upload as:<br><code>${result.upload.keyPattern}</code>` +
+              `<br>row <code>sounds[]</code> entry:<br><code>audioUrl</code> → ${result.upload.soundEntry.audioUrl}` +
+              `<br><code>analysisJsonUrl</code> → ${result.upload.soundEntry.analysisJsonUrl}`
+            : "";
+          el("savePath").innerHTML =
+            `Written to <code>${result.packageDir}</code> (profile: ${result.profile}, analysis ${(result.analysisBytes / 1024).toFixed(0)} KB)` +
+            `<br>${result.files.map((f) => `· ${f}`).join("<br>")}` +
+            (result.published ? `<br>Published as <code>${result.published.datasetPath}</code> — open the viewer and pick it in the Audio Source Switch.` : "") +
+            upload;
+          setStatus("Export complete.", "ok");
+        } catch (err) {
+          setStatus(`Export failed: ${err.message}`, "err");
+        } finally {
+          buttons.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      el("save").addEventListener("click", () => save(false));
+      el("savePublish").addEventListener("click", () => save(true));
+    </script>
+  </body>
+</html>

@@ -11,6 +11,9 @@ sample-test-audio/
 app/public/assets/
 app/public/data/*.json
 !app/public/data/.gitkeep
+# Generated asset packages from tools/generate_acoustic_assets.js (audio + analysis JSON).
+# Same reason as the entries above: regenerable, and too large to belong in git.
+output/
 05_Benchmark_Results/spot_checks/
 05_Benchmark_Results/spot_checks_exp006_loudest/
 

@@ -17,7 +17,11 @@ import {
   SpriteMaterial,
 } from "three";
 import { centroidColor } from "../colorScale";
-import type { RecordingPayload } from "../types";
+// CloudPayload rather than RecordingPayload: this component only ever read `points` and
+// `similarityEdges`, and typing it to what it actually reads lets the version switch hand it
+// an uploaded clip too. Widening a prop type only -- nothing about what this file draws has
+// changed, and nothing here should change: it IS cloud version v0.1.
+import type { CloudPayload } from "../types";
 
 // GPU particle system for the 3D "MULTI-SCALE ANALYSIS" view. A few draw calls (one Points
 // cloud, a flowing trail, a faint similarity web, two sprites) driven by a single uTime
@@ -132,7 +136,7 @@ export function ParticleField({
   payload,
   audioRef,
 }: {
-  payload: RecordingPayload;
+  payload: CloudPayload;
   audioRef: RefObject<HTMLAudioElement | null>;
 }) {
   const built = useMemo(() => {

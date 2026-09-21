@@ -10,6 +10,14 @@ export interface RenderablePoint {
   centroidNorm: number;
 }
 
+// What the 3D cloud renderers actually need in order to draw. Both a full exported
+// RecordingPayload and the Upload tab's browser-computed analysis satisfy it, so every
+// renderer version works with either without knowing which it got.
+export interface CloudPayload {
+  points: RecordingPointDatum[];
+  similarityEdges: [number, number][];
+}
+
 export interface PointDatum {
   id: string;
   audioId: string;
@@ -255,6 +263,36 @@ export interface Analysis {
   hopSeconds: number;
 }
 
+// What the audio file itself contains, probed before the pipeline resampled it (see
+// tools/lib/audio_source.js). Optional: datasets exported before the generator recorded
+// source metadata do not carry it.
+export interface AudioSourceInfo {
+  filename: string;
+  extension: string;
+  codec: string | null;
+  container: string | null;
+  sampleRateHz: number | null;
+  channels: number | null;
+  durationSeconds: number | null;
+  sizeBytes: number;
+  browserPlayable: boolean;
+}
+
+// The frequency band this dataset can honestly be plotted against. `maxHz` is the lower of
+// the analysis Nyquist (how high the STFT reached) and the source Nyquist (how high the
+// recording actually carries signal) -- scale a frequency axis to it and the axis never
+// shows a band that contains only resampler artifacts. See frequencyRange in
+// tools/export_single_recording_dataset.js.
+export interface FrequencyRange {
+  minHz: number;
+  maxHz: number;
+  analysisNyquistHz: number;
+  sourceNyquistHz: number | null;
+  // true when the source could not fill the analysis band, i.e. maxHz < analysisNyquistHz.
+  bandLimited: boolean;
+  binWidthHz: number;
+}
+
 export interface RecordingPayload {
   audioId: string;
   audioUrl: string;
@@ -262,6 +300,15 @@ export interface RecordingPayload {
   generatedFrom: string;
   pipeline: string;
   sampleRate: number;
+  // All optional: datasets exported before the generator workflow landed lack them, and the
+  // app falls back to panels.nyquistHz (see displayMaxHz in app/src/frequencyRange.ts).
+  contractVersion?: number;
+  generatedAt?: string;
+  // Same number as `sampleRate`, under a name that cannot be mistaken for the recording's
+  // own rate -- that one is source.sampleRateHz.
+  analysisSampleRateHz?: number;
+  source?: AudioSourceInfo | null;
+  frequencyRange?: FrequencyRange;
   fftSize: number;
   samplingWindowSeconds: number;
   samplingHopSeconds: number;

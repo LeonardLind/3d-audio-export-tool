@@ -11,8 +11,11 @@
     "export:viz": "node tools/export_visualization_dataset.js",
     "export:recording": "node tools/export_single_recording_dataset.js",
     "export:sample": "node tools/export_sample_recording.js",
+    "generate": "node tools/generate_acoustic_assets.js",
+    "generate:ui": "node tools/generator_server.js",
     "behavior": "node tools/build_behavior_comparison.js",
     "diagnose:external": "node tools/diagnose_external_recording.js",
+    "verify:port": "node tools/verify_browser_port_parity.mjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

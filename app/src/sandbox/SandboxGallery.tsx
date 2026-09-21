@@ -8,6 +8,7 @@ import { AcousticIndicesViz } from "./AcousticIndicesViz";
 import { SpeciesConfidence } from "./SpeciesConfidence";
 import { DetectionTimeline } from "./DetectionTimeline";
 import type { RecordingPayload } from "../types";
+import { displayMaxHz } from "../frequencyRange";
 
 // Experimental prototype gallery. Each card is self-contained and reads only from the
 // precomputed payload (analysis extracted offline in tools/lib/analysis.js) -- nothing here
@@ -22,7 +23,9 @@ export function SandboxGallery({
   audioRef: RefObject<HTMLAudioElement | null>;
 }) {
   const { analysis, panels, durationSeconds, birdnetDetections } = payload;
-  const nyquist = panels.nyquistHz;
+  // Top of every frequency axis in this gallery: the recording's usable band, which is not
+  // always the analysis Nyquist (see displayMaxHz).
+  const nyquist = displayMaxHz(payload);
   const hasRealBirdnet = !!birdnetDetections && birdnetDetections.detections.length > 0;
 
   return (

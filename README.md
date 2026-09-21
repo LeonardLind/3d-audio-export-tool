@@ -8,6 +8,7 @@ This repository intentionally excludes the large local bird-sound corpus, genera
 
 - `app/` - React, Vite, Three.js viewer for the 3D acoustic manifold.
 - `tools/` - Node scripts for feature extraction, BirdNET classification, reducer experiments, and visualization dataset export.
+- `tools/GENERATOR.md` - the Acoustic Asset Generator: audio in, analysis JSON + audio out, and the data contract shared with the XP Acoustics screen in `revx-greencubes`.
 - `01_...` through `08_...` - project notes, benchmark design, architecture notes, and decision logs.
 - `manifest_*.csv` and `05_Benchmark_Results/` - lightweight benchmark metadata/results.
 
@@ -20,6 +21,7 @@ This repository intentionally excludes the large local bird-sound corpus, genera
 - `app/dist/` - generated Vite build.
 - `node_modules/` and `app/node_modules/`.
 - `tools/models/` - BirdNET model files downloaded on first use.
+- `output/` - generated asset packages from the Acoustic Asset Generator.
 
 ## Setup On A New Computer
 
@@ -45,7 +47,16 @@ The viewer expects exported data in `app/public/data/manifest.json`. If there is
 
 ## Generate Visualization Data
 
-The most direct path is to place recordings on the new machine, then run one of the export scripts from the repo root:
+For an arbitrary recording, use the Acoustic Asset Generator. It runs the same pipeline as the
+export scripts below, but takes any audio file, validates the result before writing, and emits a
+self-contained package (analysis JSON + the audio it describes). See `tools/GENERATOR.md`.
+
+```sh
+npm run generate:ui                              # file picker + preview at http://127.0.0.1:5184
+npm run generate -- recording.wav --publish      # command line; --publish opens it in the viewer
+```
+
+The original per-dataset export scripts remain for the project's own datasets:
 
 ```sh
 npm run export:sample

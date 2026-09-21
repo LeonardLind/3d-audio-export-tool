@@ -119,6 +119,115 @@ The single-recording view (`tools/export_single_recording_dataset.js`) changed f
 
 ⸻
 
+## Amendment (2026-09-10): In-Browser Analysis for Uploaded Audio (the "Upload" tab)
+
+The Rejected Alternatives list above ruled out in-browser signal processing, with one stated
+trigger: *"Would only become attractive if the product needed users to upload and analyze new
+audio live in-browser — not the case yet."* That case is now here. The app has an **Upload**
+tab where a file that has never been through `tools/` is decoded, analyzed and rendered in the
+tab itself.
+
+**The one-way boundary still holds for every published dataset.** Everything under
+`app/public/data/` is still produced only by `tools/export_*.js` /
+`tools/generate_acoustic_assets.js`, and the app still only fetches and draws those. Nothing in
+the Upload path can write a dataset, and no exported dataset is recomputed in the browser. What
+changed is that an *ad hoc* clip the generator has never seen now has a second, narrower path
+to a picture.
+
+**Objection 2 (numerical drift between two implementations) was answered by measurement, not by
+argument.** `app/src/analysis/{fft,pca,pipeline}.ts` is a deliberate line-for-line port of
+`tools/lib/fft.js`, the `pca` path of `tools/lib/reducers.js`, and
+`runContinuousSamplingPipeline` in `tools/export_single_recording_dataset.js` — same window,
+same magnitude convention, same population-std standardization, same Gram matrix over
+`max(1, n-1)`, same 100 power iterations from the same deterministic seed vector, same
+deflation, same amplitude percentile filter, same edge rule. Fed the identical sample buffer
+that ffmpeg hands the Node exporter, the port reproduces `dataset_sample.json` to
+floating-point rounding: identical point count (254), identical `pointsBeforeAmplitudeFilter`,
+identical amplitude filter threshold, per-point fields to <= 5e-16 relative error, identical
+PCA component signs, an identical 584-edge similarity list, and an identical 639-frame centroid
+track. Any future edit to the constants in one file has to be made in the other, and that
+parity check is the test for it.
+
+**One step is genuinely not a port, and is disclosed as such.** ffmpeg decoding and resampling
+cannot be reproduced in a browser; the Upload path uses an `OfflineAudioContext` at the same
+22.05 kHz analysis rate plus an explicit channel downmix. Two consequences, both measured on
+the project sample clip (`sample-test-audio/MicrosoftTeams-video.mp3`):
+
+- **Downmix gain, matched.** `ffmpeg -ac 1` is *not* a channel average: libswresample rematrixes
+  with energy-preserving coefficients, measured at exactly 1/sqrt(2) per channel for a stereo
+  source. A straight average therefore put every uploaded amplitude 3 dB below an offline
+  export of the same file. The browser path now applies the same 1/sqrt(2). Above two channels
+  ffmpeg switches to layout-aware surround coefficients that follow no single rule (measured
+  0.748, 0.638 and 0.607 of the channel sum at 4, 6 and 8 channels), so those get an
+  energy-preserving 1/sqrt(n) and the UI states that the amplitude scale will not match an
+  export.
+- **Decoder + resampler residual, disclosed.** With gain matched, the browser's MP3 decode and
+  resample leave per-window `amplitude` 0.21% from the Node export on average (median 0.03%),
+  `dominantFrequencyHz` identical, `spectralCentroidHz` 1.14% out (~60 Hz), mean PCA position
+  drift 0.063 against a +/-6.0 cloud extent, and 93% of similarity edges unchanged. The
+  structure is the same; the last couple of digits are not.
+
+**The payload says which path produced it.** An Upload download carries
+`kind: "browser-upload-partial"`, an `analyzedIn` string naming the browser decode, and an
+`omittedFields` list — `panels.frames`, `panels.chroma`, `panels.descriptors`,
+`spectralDescriptors`, `analysis`, `birdnetDetections`. Those are absent, not zero-filled: the
+Upload tab computes the 3D manifold, the similarity edges and the centroid track, and nothing
+else. For a full asset package (all panels, BirdNET, playback transcode, validation) the
+offline generator remains the only route — `npm run generate:ui`.
+
+**Renderer versions are additive, never replacements.** The same amendment added a second 3D
+tab ("Sample 2", `app/src/scene2/CloudSceneV2.tsx`) alongside the original, which is untouched.
+Every look the cloud has had is registered in `app/src/components/cloudStyles.ts` and stays
+selectable from that tab, so comparing two versions is two clicks and reverting is one:
+
+| Version | Look |
+| --- | --- |
+| `v0.1` | The original. Near-uniform dots, threads on a blue ramp keyed to thread length, no numbers. Rendered by `ParticleField.tsx`, which is not to be modified — that file *is* v0.1. |
+| `v0.2` | Numbers and endpoint-gradient threads arrive. Filled shaded disc, no glow, dimmed at rest. |
+| `v0.3` | Lit bead: opaque core, gradient, glow, one fixed light with a specular highlight. |
+| `v0.4` | Glass shell: a hollow Fresnel-rimmed bubble. Overlapping points stay countable and threads stay visible through a dense knot, where `v0.3` blooms into one mass. |
+| `v0.5` | Dust: a tiny hard dot inside a wide bloom, so crowded regions stack into a glowing ridge and thin ones stay near black. |
+| `v0.6` | Plasma: a broad faint gas cloud per point plus a pinpoint held at ~2 CSS pixels. Amplitude reads through the gas radius, not a measurable disc — the softest size read of the set. |
+| `v0.7` | Matte: flat even discs, no glow, no shading, and the only entry using NORMAL rather than additive blending, so overlaps converge on a colour instead of blowing out toward white. The one to switch to for reading structure rather than for looks. |
+| `v0.8` | Starfield: white-hot centre, colour in the falloff, light bloom. Read a point's colour off its ring — the hue is unchanged but the core is washed with white. |
+| `v0.9` | Deep field: `v0.3`'s lit body + `v0.4`'s Fresnel rim + `v0.5`'s bloom, plus an aerial-perspective depth fade (the only entry with `depthCue`). |
+
+A style entry holds only paint parameters — brightness at rest, how much a just-played point
+pops, how far the glow reaches, thread opacity, blend mode, an optional depth cue, and a
+fragment shader. Position, colour, size
+and reveal time are outside the registry entirely, which is what makes two versions of the same
+recording comparable rather than two different pictures. Adding `v0.5` means appending an
+entry, never editing one, and the numbers for `v0.1`/`v0.2` in this table are recoverable from
+their entries alone (this project is not under version control, so a superseded look would
+otherwise be unrecoverable).
+
+From `v0.2` onwards the display channels changed as follows — sprite area now follows the
+window's mean-square energy rather than a min-anchored, floored `amplitudeNorm`; each
+similarity thread is drawn as a gradient between its two endpoints' own centroid colors instead
+of a blue ramp keyed to thread length; and the loudest points carry a printed value taken
+straight from the point datum. Positions, colors and the D-010 -> PCA embedding behind them are
+unchanged, which is why both tabs can be shown side by side on the same dataset.
+
+From `v0.3` a point is also lit -- one fixed light giving a Lambert falloff and a specular
+highlight. That shading is decoration and must be read as such: the light direction and
+intensity are identical on every point, so nothing about a point's appearance beyond its colour
+(spectral centroid), its size (amplitude) and its reveal time (emission time) carries
+information. It is called out here because a lit sphere invites the assumption that the
+highlight or the shading means something. Three versions consult something other than the data, all
+three for legibility and all three documented at their definition:
+
+- `v0.4` and `v0.5` switch a small point from an outline (resp. a hot dot in a bloom) to a
+  filled disc below ~6-7 CSS pixels, because neither shape has pixels to exist in at that
+  size. `v0.6`'s pinpoint is pinned to ~2 CSS pixels for the same reason. All three read the
+  point's size in PIXELS, never the measurement behind it, so two equally loud points always
+  look alike at the same zoom.
+- `v0.9` fades farther points (aerial perspective). This is a camera effect and normalised by
+  the camera's own distance to the cloud centre, so it is 1.0 at the centre at any zoom and
+  two identical points swap appearance as you orbit past them — the property that lets a
+  viewer read it as depth rather than as a value.
+
+⸻
+
 ## Open Items (not resolved by this document)
 
 - Real feature database / API layer (Option C) — deferred per Product Vision staging note.

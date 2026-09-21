@@ -11,8 +11,13 @@ import { SpectrogramPanel } from "./components/SpectrogramPanel";
 import { ChromagramPanel } from "./components/ChromagramPanel";
 import { SandboxGallery } from "./sandbox/SandboxGallery";
 import { BehaviorMode } from "./behavior/BehaviorMode";
+import { CloudSceneV2 } from "./scene2/CloudSceneV2";
+import { UploadMode } from "./upload/UploadMode";
 import type { DatasetManifestEntry, RecordingPayload } from "./types";
+import { displayMaxHz } from "./frequencyRange";
 import "./App.css";
+
+type Mode = "scene" | "scene2" | "sandbox" | "behavior" | "upload";
 
 function App() {
   const [datasets, setDatasets] = useState<DatasetManifestEntry[]>([]);
@@ -20,7 +25,7 @@ function App() {
   const [data, setData] = useState<RecordingPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const [mode, setMode] = useState<"scene" | "sandbox" | "behavior">("scene");
+  const [mode, setMode] = useState<Mode>("scene");
   // Owned here, shared with the audio element, the particle field, and the panels so they
   // all read playback time directly (60fps) instead of via slow React state.
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -65,9 +70,10 @@ function App() {
   return (
     <div className="viewer">
       <div className="overlay">
-        {/* Behavior mode has its own header + per-recording audio, so the single-recording
-            title/player/legend are hidden there -- only the mode toggle stays. */}
-        {mode !== "behavior" && (
+        {/* Behavior mode has its own header + per-recording audio, and Upload brings its
+            own file + player, so the single-recording title/player/legend are hidden in
+            both -- only the mode toggle stays. */}
+        {mode !== "behavior" && mode !== "upload" && (
           <>
             <h1>Bird Song Acoustic Manifold</h1>
             <p>
@@ -80,11 +86,11 @@ function App() {
             {data && <AudioPlayer key={data.audioId} src={data.audioUrl} audioRef={audioRef} onTimeChange={setCurrentTime} />}
           </>
         )}
-        {data && mode === "scene" && <CentroidLegend maxHz={data.centroidMaxHz} />}
+        {data && (mode === "scene" || mode === "scene2") && <CentroidLegend maxHz={data.centroidMaxHz} />}
         {data && mode === "scene" && (
           <div className="overlay-panels">
             <CentroidAmplitudePanel points={visiblePoints} domain={scatterDomain} total={data.pointCount} />
-            <SpectrogramPanel panels={data.panels} audioRef={audioRef} />
+            <SpectrogramPanel panels={data.panels} audioRef={audioRef} maxHz={displayMaxHz(data)} />
             <ChromagramPanel panels={data.panels} audioRef={audioRef} />
           </div>
         )}
@@ -92,20 +98,29 @@ function App() {
 
       {/* Top-center nav: audio source switch + mode toggle, always reachable regardless of mode. */}
       <div className="top-nav">
-        {mode !== "behavior" && <AudioSourceSwitch datasets={datasets} activeId={activeId} onChange={setActiveId} />}
-        {data && (
-          <div className="mode-toggle">
-            <button className={mode === "scene" ? "active" : ""} onClick={() => setMode("scene")}>
-              3D Scene
-            </button>
-            <button className={mode === "sandbox" ? "active" : ""} onClick={() => setMode("sandbox")}>
-              Sandbox
-            </button>
-            <button className={mode === "behavior" ? "active" : ""} onClick={() => setMode("behavior")}>
-              Behavior
-            </button>
-          </div>
+        {mode !== "behavior" && mode !== "upload" && (
+          <AudioSourceSwitch datasets={datasets} activeId={activeId} onChange={setActiveId} />
         )}
+        <div className="mode-toggle">
+          {/* "Sample 2" is the same dataset through the v2 renderer, kept as its own tab so
+              the original 3D Scene stays available side by side for comparison. */}
+          <button className={mode === "scene" ? "active" : ""} disabled={!data} onClick={() => setMode("scene")}>
+            3D Scene
+          </button>
+          <button className={mode === "scene2" ? "active" : ""} disabled={!data} onClick={() => setMode("scene2")}>
+            Sample 2
+          </button>
+          <button className={mode === "sandbox" ? "active" : ""} disabled={!data} onClick={() => setMode("sandbox")}>
+            Sandbox
+          </button>
+          <button className={mode === "behavior" ? "active" : ""} onClick={() => setMode("behavior")}>
+            Behavior
+          </button>
+          {/* Analyzes a file the offline generator has never seen, in this tab. */}
+          <button className={mode === "upload" ? "active" : ""} onClick={() => setMode("upload")}>
+            Upload
+          </button>
+        </div>
       </div>
 
       {data && mode === "scene" && (
@@ -127,9 +142,15 @@ function App() {
         </>
       )}
 
+      {data && mode === "scene2" && (
+        <CloudSceneV2 payload={data} audioRef={audioRef} sceneKey={data.audioId} caption={data.commonName} />
+      )}
+
       {data && mode === "sandbox" && <SandboxGallery payload={data} audioRef={audioRef} />}
 
       {mode === "behavior" && <BehaviorMode />}
+
+      {mode === "upload" && <UploadMode />}
     </div>
   );
 }

@@ -17,9 +17,14 @@ const PLOT_H = HEIGHT - PAD.top - PAD.bottom;
 export function SpectrogramPanel({
   panels,
   audioRef,
+  maxHz,
 }: {
   panels: PanelSeries;
   audioRef: RefObject<HTMLAudioElement | null>;
+  // Top of the frequency axis. Normally the recording's usable band (see displayMaxHz),
+  // which can be below the analysis Nyquist the bitmap rows span -- so the drawn source
+  // region is cropped to match, otherwise the image and its axis labels would disagree.
+  maxHz?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourceRef = useRef<HTMLCanvasElement | null>(null);
@@ -40,7 +45,10 @@ export function SpectrogramPanel({
     const ctx = canvas.getContext("2d")!;
     const cols = panels.frames.length;
     const lastTime = (cols - 1) * panels.hopSeconds;
-    const nyquist = panels.nyquistHz;
+    const nyquist = maxHz && maxHz > 0 ? maxHz : panels.nyquistHz;
+    // Fraction of the bitmap's height that falls within the displayed band. Row 0 (lowest
+    // frequency) sits at the BOTTOM of the bitmap, so the kept region is the bottom slice.
+    const bandFraction = Math.min(1, nyquist / panels.nyquistHz);
     let raf = 0;
 
     const draw = () => {
@@ -54,8 +62,10 @@ export function SpectrogramPanel({
       if (source) {
         const sx = start / panels.hopSeconds;
         const sw = WINDOW_SECONDS / panels.hopSeconds;
+        const sh = source.height * bandFraction;
+        const sy = source.height - sh;
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(source, sx, 0, sw, source.height, PAD.left, PAD.top, PLOT_W, PLOT_H);
+        ctx.drawImage(source, sx, sy, sw, sh, PAD.left, PAD.top, PLOT_W, PLOT_H);
       }
 
       // Red spectral-centroid track over the window.
@@ -123,7 +133,7 @@ export function SpectrogramPanel({
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [panels, audioRef]);
+  }, [panels, audioRef, maxHz]);
 
   return (
     <div className="panel">

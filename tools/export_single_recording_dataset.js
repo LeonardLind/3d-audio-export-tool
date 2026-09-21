@@ -13,6 +13,7 @@ const { execFileSync } = require("child_process");
 const { reduceFeatures } = require("./lib/reducers");
 const { makeFft } = require("./lib/fft");
 const { buildAnalysis } = require("./lib/analysis");
+const { probeAudioSource } = require("./lib/audio_source");
 
 const ROOT = path.resolve(__dirname, "..");
 const AUDIO_ID = process.argv[2] || "4_2MM06988_20250412_033000";
@@ -35,18 +36,22 @@ const OUTPUT_AUDIO = path.join(ROOT, "app", "public", "assets", `${AUDIO_ID}.wav
 // values keep the SAME feature family (raw flattened spectrogram -> PCA, D-010/D-004) --
 // they only change the sampling grid, which is a visualization tuning knob, NOT a
 // scientific claim, and they do NOT touch the benchmark scripts (Experiments 001-006).
-//   - 22050 Hz  -> captures up to ~11 kHz (was capped at 8 kHz), matching the reference
-//                  frequency axis and recovering cymbals/harmonics/air in music.
 //   - 1024 FFT  -> ~21.5 Hz/bin, finer than the old 31 Hz/bin.
 //   - 0.15s window / ~0.05s hop -> ~20 points/sec (was ~3), so fast passages get their
 //                  own points instead of being averaged away.
-const SAMPLE_RATE = 22050;
+// Analysis sample rate. This is the single knob that decides the ANALYSIS NYQUIST, i.e.
+// the highest frequency any exported descriptor can possibly describe. 22050 Hz (-> 11025
+// Hz Nyquist) is the default because it covers essentially all passerine song while
+// keeping ~21.5 Hz/bin resolution in the band that carries the signal; raising it spends
+// FFT bins on a mostly-empty top octave. It is a DEFAULT, not an assumption: callers may
+// override it per recording (see runContinuousSamplingPipeline's analysisSampleRate), and
+// every export records the rate it actually used plus what the source file could support,
+// so no consumer has to guess the valid frequency range. See frequencyRange in the payload.
+const DEFAULT_ANALYSIS_SAMPLE_RATE = 22050;
 const FFT_SIZE = 1024;
 const HOP_SIZE = 512;
-const FRAME_HOP_SECONDS = HOP_SIZE / SAMPLE_RATE;
 const POINT_WINDOW_SECONDS = 0.15;
 const POINT_HOP_SECONDS = 0.05;
-const FRAMES_PER_POINT = Math.max(1, Math.round(POINT_WINDOW_SECONDS / FRAME_HOP_SECONDS));
 // PCA over an N x ~3000 matrix is O(N^2 * dims); keep N bounded so long recordings stay
 // tractable. Short clips sample at the full POINT_HOP; long ones widen the hop to hit
 // this cap instead. (The 15s sample clip lands at ~300 points, well under the cap.)
@@ -158,10 +163,10 @@ function dominantCommonName(detections) {
   )[0]?.[0] ?? "Unknown";
 }
 
-function readFullAudio(audioPath) {
+function readFullAudio(audioPath, sampleRate) {
   const buffer = execFileSync(
     "ffmpeg",
-    ["-hide_banner", "-loglevel", "error", "-i", audioPath, "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "f32le", "pipe:1"],
+    ["-hide_banner", "-loglevel", "error", "-i", audioPath, "-ac", "1", "-ar", String(sampleRate), "-f", "f32le", "pipe:1"],
     { maxBuffer: 1024 * 1024 * 64 },
   );
   const samples = new Float32Array(Math.floor(buffer.length / 4));
@@ -183,7 +188,18 @@ const HAMMING = Array.from(
   { length: FFT_SIZE },
   (_, n) => 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (FFT_SIZE - 1)),
 );
-const FREQUENCIES = Array.from({ length: FFT_SIZE / 2 + 1 }, (_, k) => (k * SAMPLE_RATE) / FFT_SIZE);
+// Center frequency of each STFT bin. Depends on the analysis sample rate, so it is built
+// per run rather than once at module load. Cached per rate because every frame-level
+// descriptor loop reads it.
+const frequencyCache = new Map();
+function binFrequencies(sampleRate) {
+  let freqs = frequencyCache.get(sampleRate);
+  if (!freqs) {
+    freqs = Array.from({ length: FFT_SIZE / 2 + 1 }, (_, k) => (k * sampleRate) / FFT_SIZE);
+    frequencyCache.set(sampleRate, freqs);
+  }
+  return freqs;
+}
 
 // STFT over the WHOLE recording, computed once, so continuous sampling doesn't need
 // one ffmpeg subprocess + one spectrogram per point. Uses the radix-2 FFT (tools/lib/fft)
@@ -212,9 +228,9 @@ function rawSpectrogramFeatures(spectra) {
 // from dominantFrequencyHz (the single loudest bin at the loudest instant): centroid
 // is a smoother, whole-window "center of mass" measure, used for the
 // Centroid-Amplitude Profile panel.
-function frameCentroid(spectrum) {
+function frameCentroid(spectrum, freqs) {
   const total = spectrum.reduce((sum, value) => sum + value, 0) + 1e-12;
-  return spectrum.reduce((sum, value, i) => sum + value * FREQUENCIES[i], 0) / total;
+  return spectrum.reduce((sum, value, i) => sum + value * freqs[i], 0) / total;
 }
 
 // Per-frame descriptor time-series over the whole recording. This is the data behind the
@@ -222,12 +238,12 @@ function frameCentroid(spectrum) {
 // it drives the D-010 raw-spectrogram position. Raw physical units (Hz etc.); the app
 // normalizes for the gauges. One pass per frame, each descriptor computed inline to avoid
 // re-summing the spectrum many times.
-function analyzeFrames(spectra, samples) {
+function analyzeFrames(spectra, samples, freqs) {
   const frameCount = spectra.length;
-  const binCount = FREQUENCIES.length;
-  const freqMean = mean(FREQUENCIES);
+  const binCount = freqs.length;
+  const freqMean = mean(freqs);
   let freqVar = 1e-12;
-  for (const f of FREQUENCIES) freqVar += (f - freqMean) ** 2;
+  for (const f of freqs) freqVar += (f - freqMean) ** 2;
   const log2Bins = Math.log2(binCount);
 
   const out = {
@@ -253,7 +269,7 @@ function analyzeFrames(spectra, samples) {
       total += m;
       if (m > maxMag) maxMag = m;
       logSum += Math.log(m + 1e-12);
-      centroidNum += m * FREQUENCIES[k];
+      centroidNum += m * freqs[k];
     }
     const arithMean = total / binCount;
     const centroid = centroidNum / total;
@@ -263,19 +279,19 @@ function analyzeFrames(spectra, samples) {
     let cov = 0;
     for (let k = 0; k < binCount; k += 1) {
       const m = spectrum[k];
-      varNum += m * (FREQUENCIES[k] - centroid) ** 2;
+      varNum += m * (freqs[k] - centroid) ** 2;
       const p = m / total;
       if (p > 0) entropy += p * Math.log2(p);
-      cov += (FREQUENCIES[k] - freqMean) * (m - arithMean);
+      cov += (freqs[k] - freqMean) * (m - arithMean);
     }
 
     let acc = 0;
     const target = ROLLOFF_PERCENT * total;
-    let rolloff = FREQUENCIES[binCount - 1];
+    let rolloff = freqs[binCount - 1];
     for (let k = 0; k < binCount; k += 1) {
       acc += spectrum[k];
       if (acc >= target) {
-        rolloff = FREQUENCIES[k];
+        rolloff = freqs[k];
         break;
       }
     }
@@ -348,10 +364,10 @@ function spectralFluxPerFrame(spectra) {
 // (C, C#, ... B) by its distance in semitones from A4, accumulating magnitude. This is
 // the standard "chroma" feature -- octave-invariant harmonic content. Supplementary
 // display only, same status as the 8-axis descriptors.
-function chromaOfSpectrum(spectrum) {
+function chromaOfSpectrum(spectrum, freqs) {
   const chroma = new Array(12).fill(0);
   for (let k = 1; k < spectrum.length; k += 1) {
-    const freq = FREQUENCIES[k];
+    const freq = freqs[k];
     if (freq < CHROMA_MIN_HZ) continue;
     const pitchClass = ((Math.round(12 * Math.log2(freq / A4_HZ)) % 12) + 12) % 12;
     chroma[pitchClass] += spectrum[k];
@@ -385,7 +401,7 @@ function roundTo(value, decimals) {
 // (frame i covers time i * hopSeconds), so the app looks up one column per playback
 // instant. Magnitudes/chroma are globally normalized to 0-1 for direct rendering; the
 // descriptor arrays keep raw physical units plus a [min,max] range for gauge scaling.
-function buildPanelSeries(spectra, frameSeries, frameFlux) {
+function buildPanelSeries(spectra, frameSeries, frameFlux, freqs, sampleRate, frameHopSeconds) {
   const bins = FFT_SIZE / 2 + 1;
   const groupSize = Math.ceil(bins / PANEL_FREQ_BINS);
   const groupCount = Math.ceil(bins / groupSize);
@@ -395,7 +411,7 @@ function buildPanelSeries(spectra, frameSeries, frameFlux) {
     const lo = g * groupSize;
     const hi = Math.min(bins, lo + groupSize);
     let freqSum = 0;
-    for (let k = lo; k < hi; k += 1) freqSum += FREQUENCIES[k];
+    for (let k = lo; k < hi; k += 1) freqSum += freqs[k];
     freqHz.push(Math.round(freqSum / (hi - lo)));
   }
 
@@ -424,7 +440,7 @@ function buildPanelSeries(spectra, frameSeries, frameFlux) {
     }
     rawFrames.push(column);
     centroidTrack.push(Math.round(frameSeries.centroid[t]));
-    const chroma = chromaOfSpectrum(spectrum);
+    const chroma = chromaOfSpectrum(spectrum, freqs);
     for (const value of chroma) if (value > chromaMax) chromaMax = value;
     rawChroma.push(chroma);
   }
@@ -456,8 +472,8 @@ function buildPanelSeries(spectra, frameSeries, frameFlux) {
   for (const key of Object.keys(descriptors)) descriptorRanges[key] = minMax(descriptors[key]);
 
   return {
-    hopSeconds: FRAME_HOP_SECONDS * PANEL_TIME_STRIDE,
-    nyquistHz: SAMPLE_RATE / 2,
+    hopSeconds: frameHopSeconds * PANEL_TIME_STRIDE,
+    nyquistHz: sampleRate / 2,
     freqHz,
     // frame magnitudes normalized 0-1 (log-magnitude / global max), rounded for size
     frames: rawFrames.map((column) => column.map((value) => Number((value / magMax).toFixed(3)))),
@@ -503,20 +519,20 @@ function amplitudeThreshold(rawPoints, percentile) {
 // Slice the whole-file spectrogram/audio into overlapping fixed-length windows on a
 // uniform time grid -- this is what turns 20 detection-triggered points into hundreds
 // of continuous samples covering the full 60s.
-function buildContinuousPoints(spectra, samples, audioId, frameFlux, pointHopFrames) {
+function buildContinuousPoints(spectra, samples, audioId, frameFlux, pointHopFrames, freqs, framesPerPoint, frameHopSeconds) {
   const points = [];
   let startFrame = 0;
-  while (startFrame + FRAMES_PER_POINT <= spectra.length) {
-    const t = startFrame * FRAME_HOP_SECONDS;
-    const pointFrames = spectra.slice(startFrame, startFrame + FRAMES_PER_POINT);
+  while (startFrame + framesPerPoint <= spectra.length) {
+    const t = startFrame * frameHopSeconds;
+    const pointFrames = spectra.slice(startFrame, startFrame + framesPerPoint);
 
     const sampleStart = startFrame * HOP_SIZE;
-    const sampleLength = (FRAMES_PER_POINT - 1) * HOP_SIZE + FFT_SIZE;
+    const sampleLength = (framesPerPoint - 1) * HOP_SIZE + FFT_SIZE;
     const amplitude = frameRms(samples, sampleStart, sampleLength);
 
     let loudestFrameOffset = 0;
     let loudestFrameRms = -Infinity;
-    for (let i = 0; i < FRAMES_PER_POINT; i += 1) {
+    for (let i = 0; i < framesPerPoint; i += 1) {
       const value = frameRms(samples, sampleStart + i * HOP_SIZE, FFT_SIZE);
       if (value > loudestFrameRms) {
         loudestFrameRms = value;
@@ -524,14 +540,14 @@ function buildContinuousPoints(spectra, samples, audioId, frameFlux, pointHopFra
       }
     }
     const dominantBin = dominantFrequencyBin(pointFrames[loudestFrameOffset]);
-    const spectralCentroidHz = mean(pointFrames.map(frameCentroid));
-    const spectralFlux = mean(frameFlux.slice(startFrame, startFrame + FRAMES_PER_POINT));
+    const spectralCentroidHz = mean(pointFrames.map((frame) => frameCentroid(frame, freqs)));
+    const spectralFlux = mean(frameFlux.slice(startFrame, startFrame + framesPerPoint));
 
     points.push({
       id: `${audioId}_${t.toFixed(3)}`,
       emissionTime: t,
       amplitude,
-      dominantFrequencyHz: FREQUENCIES[dominantBin],
+      dominantFrequencyHz: freqs[dominantBin],
       spectralCentroidHz,
       spectralFlux,
       rawFeature: rawSpectrogramFeatures(pointFrames),
@@ -576,18 +592,45 @@ function buildSimilarityEdges(points) {
 // so other scripts (e.g. a diagnostic run on a non-project audio file) can reuse
 // EXACTLY this pipeline instead of re-implementing it. Does not touch the filesystem
 // beyond reading `audioPath` -- writing output is the caller's job.
-function runContinuousSamplingPipeline({ audioId, audioPath, commonName, generatedFrom, audioUrl }) {
-  const samples = readFullAudio(audioPath);
+function runContinuousSamplingPipeline({
+  audioId,
+  audioPath,
+  commonName,
+  generatedFrom,
+  audioUrl,
+  analysisSampleRate = DEFAULT_ANALYSIS_SAMPLE_RATE,
+  source,
+}) {
+  const sampleRate = analysisSampleRate;
+  const frameHopSeconds = HOP_SIZE / sampleRate;
+  const framesPerPoint = Math.max(1, Math.round(POINT_WINDOW_SECONDS / frameHopSeconds));
+  const freqs = binFrequencies(sampleRate);
+  // What the file itself contains, before ffmpeg resamples it to the analysis rate. Passed
+  // in by callers that already probed (so the generator UI doesn't probe twice); probed
+  // here otherwise. Never fatal -- the pipeline runs fine without it, we just can't then
+  // state how much of the analysis band is real signal.
+  let sourceInfo = source ?? null;
+  if (!sourceInfo) {
+    try {
+      sourceInfo = probeAudioSource(audioPath);
+    } catch (err) {
+      console.error(`Source probe failed, continuing without source metadata: ${err.message}`);
+    }
+  }
+
+  const samples = readFullAudio(audioPath, sampleRate);
   const spectra = stft(samples);
   const frameFlux = spectralFluxPerFrame(spectra);
-  const frameSeries = analyzeFrames(spectra, samples);
+  const frameSeries = analyzeFrames(spectra, samples, freqs);
 
   // Adaptive point hop: sample at POINT_HOP_SECONDS for short clips, but widen it on long
   // recordings so PCA (O(N^2 * dims)) stays tractable and the particle count stays sane.
-  const baseHopFrames = Math.max(1, Math.round(POINT_HOP_SECONDS / FRAME_HOP_SECONDS));
+  const baseHopFrames = Math.max(1, Math.round(POINT_HOP_SECONDS / frameHopSeconds));
   const capHopFrames = Math.ceil(spectra.length / MAX_POINTS);
   const pointHopFrames = Math.max(baseHopFrames, capHopFrames);
-  const allContinuousPoints = buildContinuousPoints(spectra, samples, audioId, frameFlux, pointHopFrames);
+  const allContinuousPoints = buildContinuousPoints(
+    spectra, samples, audioId, frameFlux, pointHopFrames, freqs, framesPerPoint, frameHopSeconds,
+  );
 
   // Noise filter: drop the quietest AMPLITUDE_FILTER_PERCENTILE fraction of windows
   // (likely silence/background) before PCA sees them -- see constant comment above.
@@ -638,16 +681,35 @@ function runContinuousSamplingPipeline({ audioId, audioPath, commonName, generat
     .sort((a, b) => a.emissionTime - b.emissionTime);
 
   const similarityEdges = buildSimilarityEdges(points);
-  const panels = buildPanelSeries(spectra, frameSeries, frameFlux);
+  const panels = buildPanelSeries(spectra, frameSeries, frameFlux, freqs, sampleRate, frameHopSeconds);
   // Experimental bioacoustic analysis for the sandbox gallery (modular, offline, does not
   // drive the 3D position). Aligned to panels (PANEL_TIME_STRIDE=1 -> same frame hop).
   const analysis = buildAnalysis({
     spectra,
     frameSeries,
-    hopSeconds: FRAME_HOP_SECONDS,
-    sampleRate: SAMPLE_RATE,
+    hopSeconds: frameHopSeconds,
+    sampleRate,
     fftSize: FFT_SIZE,
   });
+
+  // The frequency range this export can honestly speak about. There are two separate
+  // ceilings: the analysis Nyquist (how high the STFT reaches) and the source Nyquist (how
+  // high the recording actually carries signal). maxHz is the lower of the two, so a
+  // consumer that scales its frequency axis to maxHz never draws a band containing only
+  // resampler artifacts. This replaces the previous arrangement, where the axis ceiling was
+  // implied by a hardcoded analysis rate and had to be assumed downstream.
+  const analysisNyquistHz = sampleRate / 2;
+  const sourceNyquistHz = sourceInfo?.sampleRateHz ? sourceInfo.sampleRateHz / 2 : null;
+  const frequencyRange = {
+    minHz: 0,
+    maxHz: sourceNyquistHz === null ? analysisNyquistHz : Math.min(analysisNyquistHz, sourceNyquistHz),
+    analysisNyquistHz,
+    sourceNyquistHz,
+    // true when the source could not fill the analysis band (a narrow-band file upsampled
+    // to the analysis rate): everything above sourceNyquistHz is resampling, not signal.
+    bandLimited: sourceNyquistHz !== null && sourceNyquistHz < analysisNyquistHz,
+    binWidthHz: sampleRate / FFT_SIZE,
+  };
 
   return {
     audioId,
@@ -655,12 +717,19 @@ function runContinuousSamplingPipeline({ audioId, audioPath, commonName, generat
     commonName,
     generatedFrom,
     pipeline:
-      `continuous raw flattened spectrogram at ${SAMPLE_RATE}Hz / ${FFT_SIZE}-FFT, ${POINT_WINDOW_SECONDS}s window / ~${POINT_HOP_SECONDS}s hop across the whole recording (D-010) -> amplitude noise filter (quietest ${Math.round(AMPLITUDE_FILTER_PERCENTILE * 100)}% dropped) -> PCA top-3 components fit on this recording (D-004)`,
-    sampleRate: SAMPLE_RATE,
+      `continuous raw flattened spectrogram at ${sampleRate}Hz / ${FFT_SIZE}-FFT, ${POINT_WINDOW_SECONDS}s window / ~${POINT_HOP_SECONDS}s hop across the whole recording (D-010) -> amplitude noise filter (quietest ${Math.round(AMPLITUDE_FILTER_PERCENTILE * 100)}% dropped) -> PCA top-3 components fit on this recording (D-004)`,
+    // Rate the STFT actually ran at. Kept under the original name because the app and
+    // every already-exported dataset read `sampleRate`; analysisSampleRateHz is the same
+    // number under a name that does not read as "the recording's own sample rate" -- that
+    // one is source.sampleRateHz.
+    sampleRate,
+    analysisSampleRateHz: sampleRate,
+    source: sourceInfo,
+    frequencyRange,
     fftSize: FFT_SIZE,
     samplingWindowSeconds: POINT_WINDOW_SECONDS,
-    samplingHopSeconds: pointHopFrames * FRAME_HOP_SECONDS,
-    durationSeconds: samples.length / SAMPLE_RATE,
+    samplingHopSeconds: pointHopFrames * frameHopSeconds,
+    durationSeconds: samples.length / sampleRate,
     amplitudeFilterPercentile: AMPLITUDE_FILTER_PERCENTILE,
     amplitudeFilterThreshold: amplitudeThresholdValue,
     pointsBeforeAmplitudeFilter: allContinuousPoints.length,
@@ -734,27 +803,40 @@ async function main() {
 // coordinate system, which cannot be meaningfully averaged (see D-001 in
 // 01_Master_Framework: fit one shared model, THEN combine). Returns raw windows + the same
 // analysis/descriptors the sandbox uses, so the classifier has every feature available.
+// Deliberately NOT parameterized by analysis rate, unlike runContinuousSamplingPipeline.
+// The whole point of this entry is that every recording's windows go into ONE shared PCA,
+// and a feature vector is a flattened spectrogram: change the rate and the bins mean
+// different frequencies, so vectors from two rates are not the same feature space and
+// cannot share a model (D-001: fit one shared model, THEN combine). Pinning the default
+// rate here keeps the batch comparable by construction.
 function extractContinuousWindows(audioPath) {
-  const samples = readFullAudio(audioPath);
+  const sampleRate = DEFAULT_ANALYSIS_SAMPLE_RATE;
+  const frameHopSeconds = HOP_SIZE / sampleRate;
+  const framesPerPoint = Math.max(1, Math.round(POINT_WINDOW_SECONDS / frameHopSeconds));
+  const freqs = binFrequencies(sampleRate);
+
+  const samples = readFullAudio(audioPath, sampleRate);
   const spectra = stft(samples);
   const frameFlux = spectralFluxPerFrame(spectra);
-  const frameSeries = analyzeFrames(spectra, samples);
+  const frameSeries = analyzeFrames(spectra, samples, freqs);
 
-  const baseHopFrames = Math.max(1, Math.round(POINT_HOP_SECONDS / FRAME_HOP_SECONDS));
+  const baseHopFrames = Math.max(1, Math.round(POINT_HOP_SECONDS / frameHopSeconds));
   const capHopFrames = Math.ceil(spectra.length / MAX_POINTS);
   const pointHopFrames = Math.max(baseHopFrames, capHopFrames);
-  const allContinuousPoints = buildContinuousPoints(spectra, samples, "win", frameFlux, pointHopFrames);
+  const allContinuousPoints = buildContinuousPoints(
+    spectra, samples, "win", frameFlux, pointHopFrames, freqs, framesPerPoint, frameHopSeconds,
+  );
 
   const amplitudeThresholdValue = amplitudeThreshold(allContinuousPoints, AMPLITUDE_FILTER_PERCENTILE);
   const windows = allContinuousPoints.filter((point) => point.amplitude >= amplitudeThresholdValue);
 
   return {
-    durationSeconds: samples.length / SAMPLE_RATE,
-    sampleRate: SAMPLE_RATE,
+    durationSeconds: samples.length / sampleRate,
+    sampleRate,
     fftSize: FFT_SIZE,
     windows, // each has: emissionTime, amplitude, dominantFrequencyHz, spectralCentroidHz, spectralFlux, rawFeature
-    panels: buildPanelSeries(spectra, frameSeries, frameFlux),
-    analysis: buildAnalysis({ spectra, frameSeries, hopSeconds: FRAME_HOP_SECONDS, sampleRate: SAMPLE_RATE, fftSize: FFT_SIZE }),
+    panels: buildPanelSeries(spectra, frameSeries, frameFlux, freqs, sampleRate, frameHopSeconds),
+    analysis: buildAnalysis({ spectra, frameSeries, hopSeconds: frameHopSeconds, sampleRate, fftSize: FFT_SIZE }),
   };
 }
 

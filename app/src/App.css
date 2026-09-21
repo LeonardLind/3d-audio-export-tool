@@ -1076,3 +1076,239 @@
   color: #f3f4f6;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
+
+/* ---------------------------------------------------------------------------------
+   v2 3D manifold ("Sample 2" tab) + Upload tab.
+   --------------------------------------------------------------------------------- */
+
+/* Display-channel controls for the v2 cloud: which measurement drives size, which
+   number is printed on each point, how many points get one. */
+.cloud-controls {
+  width: 316px;
+}
+
+.control-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.control-label {
+  flex: 0 0 52px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.control-buttons button {
+  font: inherit;
+  font-size: 10px;
+  color: #cbd2df;
+  background: rgba(20, 22, 30, 0.8);
+  border: 1px solid #2a2f3a;
+  border-radius: 999px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.control-buttons button:hover:not(:disabled) {
+  border-color: #3f8cff;
+}
+
+.control-buttons button.active {
+  background: #3f8cff;
+  border-color: #3f8cff;
+  color: #06111f;
+  font-weight: 600;
+}
+
+.control-buttons button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cloud-controls .panel-note {
+  margin: 3px 0 0 60px;
+}
+
+.cloud-download {
+  margin: 12px 0 0 60px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #06210f;
+  background: #22a35a;
+  border: 1px solid #22a35a;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cloud-download:hover {
+  filter: brightness(1.12);
+}
+
+.cloud-controls .cloud-download-note {
+  margin-top: 4px;
+}
+
+/* Upload tab: file picker, progress, measurement readout, download form. */
+.upload-controls {
+  margin-top: 8px;
+  pointer-events: auto;
+}
+
+.upload-button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: #06210f;
+  background: #22a35a;
+  border: 1px solid #22a35a;
+  border-radius: 999px;
+  padding: 5px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.12s ease;
+}
+
+.upload-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.upload-button:disabled {
+  background: rgba(20, 22, 30, 0.8);
+  border-color: #2a2f3a;
+  color: #6b7280;
+  cursor: default;
+}
+
+.upload-progress {
+  margin-top: 8px;
+  width: 300px;
+}
+
+.upload-progress-label {
+  font-size: 10px;
+  color: #9ca3af;
+  font-family: ui-monospace, Consolas, monospace;
+  margin-bottom: 3px;
+}
+
+.upload-progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(42, 47, 58, 0.9);
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: #3f8cff;
+  transition: width 0.1s linear;
+}
+
+.upload-error {
+  margin-top: 8px;
+  width: 300px;
+  font-size: 11px;
+  color: #ff8a7a;
+  pointer-events: auto;
+}
+
+/* Measurement readout: label/value rows, values right-aligned and monospaced so the
+   numbers line up in a column. */
+.upload-facts {
+  margin: 2px 0 0;
+  font-size: 10px;
+}
+
+.upload-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 1.5px 0;
+  border-bottom: 1px solid rgba(42, 47, 58, 0.55);
+}
+
+.upload-facts dt {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.upload-facts dd {
+  margin: 0;
+  color: #e5e7eb;
+  font-family: ui-monospace, Consolas, monospace;
+  text-align: right;
+}
+
+.upload-field {
+  display: block;
+  margin: 6px 0;
+}
+
+.upload-field span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+  font-family: ui-monospace, Consolas, monospace;
+  margin-bottom: 2px;
+}
+
+.upload-field input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: #e5e7eb;
+  background: rgba(4, 5, 10, 0.7);
+  border: 1px solid #2a2f3a;
+  border-radius: 5px;
+  padding: 4px 7px;
+}
+
+.upload-field input:focus {
+  outline: none;
+  border-color: #3f8cff;
+}
+
+/* index.css styles `code` from the system light/dark palette and makes it inline-flex.
+   The app chrome is always dark and these sit mid-sentence, so both are overridden here --
+   otherwise a viewer in light mode gets near-white boxes, each on its own line. */
+.panel-note code {
+  display: inline;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 9px;
+  line-height: inherit;
+  color: #cbd2df;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.upload-warning {
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: #ffcf6b;
+  margin: 4px 0 0;
+}
+
+/* Lead-in sentence of a control note: names the channel, so the per-option text below can
+   be about the option rather than repeating what is being shown. */
+.cloud-controls .panel-note strong {
+  color: #cbd2df;
+  font-weight: 600;
+}
