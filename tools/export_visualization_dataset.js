@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { reduceFeatures } = require("./lib/reducers");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 const SELECTED_WINDOWS_CSV = path.join(ROOT, "05_Benchmark_Results", "experiment_006_loudest_windows.csv");
@@ -59,7 +60,7 @@ function parseCsv(text) {
 }
 
 function readSamples(audioPath, startSeconds, durationSeconds) {
-  const buffer = execFileSync("ffmpeg", [
+  const buffer = execFileSync(FFMPEG, [
     "-hide_banner",
     "-loglevel",
     "error",

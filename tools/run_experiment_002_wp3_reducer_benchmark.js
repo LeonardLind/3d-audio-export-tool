@@ -3,6 +3,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const TSNE = require("tsne-js");
 const { reduceFeatures } = require("./lib/reducers");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 function argValue(name, fallback = null) {
@@ -79,7 +80,7 @@ function parseCsv(text) {
 }
 
 function readWindowSamples(audioPath, startSeconds) {
-  const buffer = execFileSync("ffmpeg", [
+  const buffer = execFileSync(FFMPEG, [
     "-hide_banner",
     "-loglevel",
     "error",

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 const MANIFEST = path.join(ROOT, "manifest_slice2_birdnet_150.csv");
@@ -65,7 +66,7 @@ function escapeCsv(value) {
 }
 
 function readSamples(audioPath, startSeconds, durationSeconds) {
-  const buffer = execFileSync("ffmpeg", [
+  const buffer = execFileSync(FFMPEG, [
     "-hide_banner",
     "-loglevel",
     "error",

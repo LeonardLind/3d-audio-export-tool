@@ -10,6 +10,7 @@
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { FFPROBE } = require("./ffbin");
 
 // Containers ffmpeg decodes for analysis. The pipeline itself accepts anything ffmpeg can
 // read -- this list only drives the file picker's filter and the "supported formats" hint.
@@ -25,7 +26,7 @@ function probeAudioSource(audioPath) {
   let raw;
   try {
     raw = execFileSync(
-      "ffprobe",
+      FFPROBE,
       [
         "-hide_banner", "-loglevel", "error",
         "-select_streams", "a:0",

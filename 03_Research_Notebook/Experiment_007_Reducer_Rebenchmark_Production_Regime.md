@@ -1,0 +1,501 @@
+# Experiment 007 — Reducer Re-benchmark at the Displayed Dimensionality, Production Regime (within-recording)
+
+**Date:** 2026-09-29 (pre-registration written and revised the same day after internal review; run date to be filled in at run time)
+**Work Package:** WP3 (Embedding Benchmark), v2.0 track
+**Related Decision Log ID(s):** D-004 (PCA), D-006 (negative controls), D-010 (raw spectrograms), D-005 (Rule 001), D-011 (Rule 002: benchmark plan before implementation), D-008 (no individual-bird claims; scope only). Proposed new ID: **D-014: display reducer and dimensionality for the production regime** (provisional; the ID is assigned only when results come in, and may change if another v2 experiment closes first).
+**Status:** Pre-registered, not yet run. **Not yet frozen**: see "Freeze record" in Reproducibility Notes. No corpus run may start before the freeze.
+
+**Scientific Hierarchy level:** Frame (`01_Master_Framework/v0.4_Final.md`, Scientific Hierarchy). Each point is a 0.15 s nominal window of 6 consecutive STFT frames. Nothing is segmented, so no point is a syllable, phrase or acoustic event, and no result here may be described at those levels.
+
+**Scope limits stated up front:**
+- **No individual-bird claims (D-008).** A recording is not evidence of a single individual, and nothing here speaks to individual identity.
+- **No perceptual claims.** Every metric here is computed in the z-scored log1p-spectrogram feature space. Whether two points *sound* alike to a listener is not tested by this experiment.
+
+⸻
+
+## Question
+
+**Under the production regime (PR) that the shipped exporter uses today, and within single recordings, does PCA preserve local neighbourhood structure at the dimensionalities the viewer actually displays (1, 2 and 3)? Does it do so better than matched structureless controls, and at least as well as UMAP, t-SNE and a seeded Gaussian random projection?**
+
+A real "no" is possible in three separate ways, and each one is a legitimate outcome:
+
+1. PCA does not beat its controls at some displayed dimension, so that view is "not better than random".
+2. A non-linear reducer beats PCA outside the tie band.
+3. PCA cannot be told apart from a random linear projection. This is decided by a **direct, pre-registered paired test PCA vs RP at every d** (see "PCA vs random projection" in the Decision Rule). The test runs whether or not RP passes its own controls, so this outcome can actually come out.
+
+A fourth, non-"yes" outcome is also pre-declared: **inconclusive (underpowered)**, when a comparison's confidence interval is too wide to decide (see the tie rule). It is reported as such and never as support for PCA.
+
+### Why this experiment exists (evidence gap)
+
+- D-004 (PCA) was decided on different evidence:
+  - Experiment 002: 22 rows, 1 s windows, 16 kHz / 512-FFT, 15677 dims, output at **20** dimensions.
+  - Experiment 004: 150 rows, same front end, output at **106** dimensions.
+  - In both, every point came from a different BirdNET detection, pooled across recordings.
+- **D-010 (raw spectrogram features) also rests on evidence from that other regime** (1 s / 16 kHz / 15677 dims, across recordings). Experiment 007 **holds the feature set fixed** at the production feature (6 × 513 log1p magnitude). Its results therefore say nothing about whether raw spectrograms are the right features under the production regime; that question is not tested here.
+- The shipped view is different in every one of these respects:
+  - PCA to **3** dimensions.
+  - **0.15 s** windows at 22050 Hz / 1024-FFT, 3078 dims.
+  - Points from **within one recording**.
+  - It has never been benchmarked.
+- The only existing 3D figure for raw spectrograms is Experiment 001 slice-2 fixed-3 (`05_Benchmark_Results/experiment_001_manifest_slice2_birdnet_150_fixed3_results.json`):
+  - T(k=5) = **0.6865** vs matched-Gaussian control **0.6203** (margin 0.0662, pass).
+  - n = 150, across recordings, 1 s windows, a single value with no confidence interval.
+  - It does not describe the shipped regime.
+- UMAP and t-SNE were never compared at 3D.
+- The only t-SNE runs (Experiments 002 and 004) are **invalid**. The installed `tsne-js` reported only 3 executed iterations despite `nIter = 1000` (Experiment 002, Unexpected Observations; `TODO.md`, "t-SNE Implementation Check"). The documented root cause is in `tools/lib/reducers.js` (`TSNE_JS_ROOT_CAUSE`; see "Library and implementation facts" below).
+- The viewer in v2.0 adds X / Y / Z axis toggles:
+  - 1 axis gives a line.
+  - 2 axes give a 2D scatter.
+  - 3 axes give the cloud.
+  - Every one of these views is a display claim that needs its own evidence (Core Philosophy: "Every visual element should represent measurable information").
+
+### Production regime (PR), verbatim definition used by this experiment
+
+What `tools/export_single_recording_dataset.js` does today:
+
+- **Decoding:** mono at 22050 Hz (`readFullAudio`, ffmpeg from `tools/lib/ffbin.js`).
+- **STFT:** Hamming window 1024, hop 512 (≈ 23.2 ms).
+- **Points:** windows of 6 consecutive frames, every 2 frames.
+  - Nominal length is 0.15 s. The actual span is 3584 samples = 0.1625 s.
+  - The hop is ≈ 0.046 s. It widens (`pointHopFrames = max(2, ceil(frames / 700))`) so that a recording yields **at most 700 windows before the amplitude filter**.
+- **Feature:** frame-major 6 × 513 log1p magnitude (`rawSpectrogramFeatures`), 3078 dims.
+- **Amplitude filter:** the quietest 20% of windows by RMS are dropped. Window RMS is computed from the time-domain samples over the window's span (`frameRms` in `buildContinuousPoints`). The threshold is the sorted RMS at index `floor(0.2·(N−1))`, and windows at or above it are kept, so at most ≈ 560 points remain. The exact count is logged per recording.
+- **Reduction:** per-recording z-scoring (population SD; a zero-SD column is divided by 1), then PCA to 3 components with the production `pca()` in `tools/lib/reducers.js` (described exactly in the Candidates table).
+- **Display positions:** `position = embedding[0..2] × POSITION_SPREAD / max|embedding|` (`POSITION_SPREAD` = 6), one uniform scale, which changes no neighbour rank.
+- **Similarity edges:** the k = 3 nearest neighbours in the 3D PCA positions, excluding candidates less than 1.5 s apart (`buildSimilarityEdges`; candidates sorted by distance with a stable sort, so ties go to the lower index).
+
+The runner must obtain the feature matrix **through the production code path** (`readFullAudio` + `computeContinuousFrontEnd`, and `runContinuousSamplingPipelineOnSamples` for synthetic input, all exported by `tools/export_single_recording_dataset.js`), not through a re-implementation. See the parity check in Method.
+
+## Hypothesis
+
+Stated so that each can turn out to be wrong. There is no strong directional prior on H2 or H5: nothing in `04_Literature/Literature_Database.md` benchmarks these reducers at 1–3 output dimensions on within-recording, frame-level birdsong windows.
+
+- **H1 (PCA vs controls):** production PCA passes both negative controls (pre-committed rule below) at d = 1, 2 and 3.
+  - Basis: Experiment 001 slice-2 fixed-3 margin 0.0662. This is a weak prior because the regime differs.
+  - Falsified at any d where the pass rule fails.
+- **H2 (PCA vs non-linear at the displayed dimension):** at d = 3, no candidate beats PCA outside the tie band.
+  - Falsified if UMAP or t-SNE is the decisive winner at d = 3.
+  - Competing expectation, held as equally plausible: UMAP and t-SNE optimise local-neighbourhood objectives. Thomas2022 notes that UMAP preserves local structure and relative closeness rather than absolute distance. They may therefore score higher T(k=5) than PCA at 2–3 dims.
+  - Experiments 002 and 004 do not transfer here: they were at 20 and 106 dims with a broken t-SNE.
+- **H3 (window-overlap confound):** adjacent PR windows share 4 of 6 frames, so original-space k-nearest neighbours are expected to be dominated by temporally adjacent windows.
+  - Prediction: stationary noise pushed through PR (synthetic white and pink noise, and each recording's phase-randomised surrogate S) will **also** pass the matched-Gaussian and column-permuted controls.
+  - If so, those two controls show only "better than a structureless matrix", not "bird-specific structure".
+  - Falsified if the noise and surrogate inputs fail those controls.
+  - The frame-shuffle surrogate F (reported only) is not part of this prediction; no direction is predicted for it.
+- **H4 (display loss):** production PCA's T(k=5) at d = 3 is lower than PCA's T(k=5) at its auto-95 dimensionality d95, with a paired CI entirely below 0.
+  - The size of the loss is not predicted.
+- **H5 (similarity-edge fidelity):** the exported PCA-3D similarity edges agree with gap-restricted original-space nearest neighbours more than the edges built the same way on G, P and S do (edge-fidelity metric EF below, paired CI lower bound ≥ 0.02 against each).
+  - No directional prior. Falsified if any of the three comparisons fails.
+
+## Method
+
+* **Dataset / subset used:** `manifest_v2_corpus.json` (see `03_Research_Notebook/Corpus_v2.md`).
+  - Contents as built on 2026-09-29 (read from the manifest `summary`; re-read and logged at run time with the manifest's SHA-256): **60 evidence recordings** in `recordings[]` (12 species × 5; iNaturalist research grade; sound licences CC0 13, CC-BY 45, CC-BY-SA 2) plus **2 Wikimedia Commons Bluethroat demo files** in `demo[]`. `Corpus_v2.md` states the demo files "are not part of the evidence set".
+  - This is a **new corpus**. Results are new experiments, not reproductions of Experiments 001–006.
+  - **Primary analysis set:** the evidence recordings in `recordings[]`. All corpus-level verdicts and the decision use this set only.
+  - **Demo files:** analysed with exactly the same procedure, reported per file in a separate `demo` block, and included in a **with-demo sensitivity aggregation** (reported, not governing). This follows Experiment 008's convention.
+  - **Disclosure (development exposure):** `Assets/smoke/Luscinia_svecica_song.ogg` is byte-identical to the demo file `Luscinia_svecica_song.ogg` (same sha1, per `Corpus_v2.md`). Its outputs have been seen during development:
+    - the shipped demo dataset is exactly its PR PCA-3D view;
+    - the `tools/lib/reducers.js` header records PCA convergence measurements on it (234 windows × 3078 dims);
+    - this pre-registration's feasibility measurements (below) computed its d95.
+    - Whether trustworthiness values were computed on it during development is not known to this document; assume they were.
+    - Because the demo files are outside the primary set, the headline verdicts are **without** it. The with-demo sensitivity aggregation is the "with it" check. Any verdict that differs between the two is listed in Discussion.
+    - Whether any evidence recording was run through the PR pipeline before the freeze is not known to this document. The manifest records only decode checks (`decodedSamples22050`). The freeze record must state it.
+  - **Recording index `r`:** the 0-based position in `manifest_v2_corpus.json` `recordings[]`, fixed before any exclusion, so that seeds never shift. Demo files take their index in `demo[]` plus 900 (r = 900, 901), so their seeds cannot collide with evidence seeds (same convention as Experiment 008).
+  - **Pre-stated exclusion rule:** a recording is excluded from **all** arms if it fails to decode, or if it yields fewer than **100** points after the amplitude filter.
+    - 100 points is enough for t-SNE perplexity 30 (which needs n > 3·30 = 90), UMAP nNeighbors 15, and k = 10 (which needs k < n/2).
+    - At the base hop this is roughly ≥ 6 s of audio. 4 of the 60 evidence recordings have `durationSeconds` < 6 s in the manifest (read 2026-09-29), so a few exclusions are plausible. The actual count is only known at run time.
+    - Every exclusion is logged with its reason in `exclusions[]`. There are no silent drops.
+  - All candidates are evaluated on the same set of recordings, except under the pre-stated compute subsetting below.
+  - `Assets/smoke/Luscinia_svecica_song.ogg` is used for runner smoke tests and the parity check. Smoke-test numbers are never reported as results. The file's reported numbers come only from its `demo[]` entry.
+* **Procedure:** per analysed recording:
+  1. PR front end → feature matrix X (n × 3078) after the amplitude filter.
+     - Every reducer standardises its input internally with the same rule (population SD, zero-SD column → scale 1): `pca()`, `reduceTsne` and `reduceRandomProjection` via `standardizeFlat`, `reduceUmap` via `standardize`. The runner passes the **unstandardised** X to every reducer.
+     - The metrics' original space is `standardizeFlat(X)` with squared Euclidean distance. The runner asserts at start-up that `standardize(X)` and `standardizeFlat(X)` agree to ≤ 1e-12 on the first analysed recording.
+     - No PCA pre-reduction is applied before t-SNE or UMAP (t-SNE's PCA *initialisation*, R5, is not a pre-reduction of the input).
+  2. Build the controls from X (see the controls table): matched Gaussian G (offset +1) and column-permuted P (offset +2). As extra rigor, two surrogates go through the full PR front end: the phase-randomised surrogate S (offset +7) and the frame-shuffle surrogate F (offset +8).
+  3. Run every candidate at every dimension on X, G, P, S and F (candidates table). For a given candidate, the reducer's own seed is **identical** across X, G, P, S and F, so real-vs-control differences come only from the input.
+  4. Compute T and C at k = 5 and k = 10, plus the gap-excluded T_gap (below), for every run; and the edge-fidelity metric EF for PCA-3D. Log wall-clock time per run.
+  5. Aggregate across recordings; apply the pre-committed decision rule. The rule is implemented in code, so verdicts are computed and not chosen by hand.
+
+  **Candidates** (implementations as they are in the v2.0 working tree on 2026-09-29; the runner logs the git blob hash of `tools/lib/reducers.js` and whether the tree is dirty)
+
+  | Candidate | Implementation | Parameters | Dimensions |
+  |---|---|---|---|
+  | PCA (production) | `tools/lib/reducers.js` `pca(X, d)`. Gram-matrix (n × n, G = XsXsᵀ/(n−1)) power iteration from the deterministic start vector sin((i+1)(c+1)), iterated until the relative residual ‖Gv − λv‖/|λ| < `PCA_TOLERANCE` = 1e-10 or `PCA_MAX_ITERATIONS` = 5000 updates, then Hotelling deflation. It returns per-component diagnostics (`iterations`, `relativeResidual`, `converged`, `nextEigenvalueRatio`). This is **the implementation that ships**. For every run on X, G, P, S and F, the runner logs every component's `converged` flag, iteration count, residual and `nextEigenvalueRatio` (the probe of λ₄ is on by default for a fixed component count). | none | 1, 2, 3 (nested leading components: PC1; PC1–2; PC1–3, from one `pca(X, 3)` call); d95 as a reference, computed differently (see below) |
+  | UMAP-15 | `umap-js` 1.4.0 via `reducers.js` `reduceUmap` | nNeighbors 15, minDist 0.1, spread 1.0, nEpochs library default (500 for n ≤ 2500, `getNEpochs` in `dist/umap.js`), `random = makeRandom(seed)`. **nNeighbors must be passed explicitly**: `reduceUmap`'s own default is 5. | 1, 2, 3 (fit separately at each d) |
+  | UMAP-5 | as above | nNeighbors 5, minDist 0.1, spread 1.0 | 1, 2, 3 |
+  | t-SNE | `reducers.js` `reduceTsne` with `engine: "exact"`: exact O(n²) gradient, no early stopping, exactly `nIter` steps (conformance to R1–R7 below is **asserted by the runner**, not assumed) | perplexity 30, **1000 iterations actually executed**, all other settings passed explicitly (R4–R6) | 1, 2, 3 (fit separately at each d) |
+  | Random projection (RP), floor baseline | `reducers.js` `reduceRandomProjection`: Xs·R, with R (3078 × d) entries i.i.d. N(0, 1/d) from `makeRandom(seed)` + `randomNormal` (Box–Muller cosine branch, u₁ clamped to ≥ 1e-12), filled column by column | none | 1, 2, 3 (fit separately at each d) |
+
+  **Why PCA's fidelity is checked at d = 1, 2, 3 even though it now iterates to a tolerance:**
+  - The stopping rule bounds the relative *residual*. It does not by itself guarantee an accurate eigen*vector* when the next eigenvalue is close. The `reducers.js` header records such a case on the smoke file under the old 100-iteration rule: component 6 had λ₇/λ₆ = 0.989 and |cos| = 0.675 with the exact eigenvector.
+  - A component can also stop at the 5000-iteration cap without converging. On a seeded 200 × 3078 Gaussian matrix, 73 of the 183 auto-95 components did (feasibility table below).
+  - So the check below compares production `pca()` with an exact eigendecomposition on every recording.
+
+  **Auto-95 reference (PCA only):**
+  - **Why PCA only:** the viewer never displays more than 3 axes. UMAP or t-SNE embeddings at d95 (typically tens to hundreds of dims) would therefore not be display-relevant. The only purpose of d95 is to quantify how much neighbourhood preservation the 3-axis display gives up, for the "Why 3D?" question and Information Preservation Reporting.
+  - **How d95 is computed:** with an **exact eigendecomposition** of the n × n Gram matrix of `standardizeFlat(X)` (`ml-matrix` 6.14.0 `EVD` with `assumeSymmetric: true`), not with production `pca(X, null)`. d95 = the smallest component count with cumulative explained variance ≥ 0.95 (capped at n − 1). The d95 embedding = the top-d95 eigenvectors scaled by √(λ(n−1)). Controls at d95 use the same EVD procedure.
+    - Reason (feasibility table): production `pca(·, null)` took 21.6 s on a 200 × 3078 Gaussian matrix and left 73 of its 183 components unconverged, because a nearly flat eigenvalue spectrum makes power iteration slow. The EVD route took 0.14 s for the same matrix (Gram 0.09 s + EVD 0.04 s) and gave the same d95 = 183.
+    - The production `pca()` is not used at d95. d95 is not a displayed view, so "the decision uses what ships" does not apply to it.
+  - **Primary d95 controls:** each control is reduced to the **same** d95 as its real matrix.
+    - This deliberately differs from Experiment 001 `--auto95`, where the control chose its own component count. For comparability, the **own-d95** control variant is also reported as a secondary result.
+  - **Near-full-rank guard:** d95/(n−1) is logged per recording, for the real matrix and for each control's own d95. When d95 ≥ 0.9·(n−1), the embedding is close to the full-rank original, and T tends towards its maximum for any input, so the real-vs-control comparison becomes nearly trivial. **Pre-stated:** any d95 control comparison (primary or own-d95) on a recording where the relevant d95 ≥ 0.9·(n−1) is *descriptive only*. If more than half of the analysed recordings are in this state for an arm, that arm's corpus-level verdict is reported as "descriptive only (near full rank)" and no pass or fail is stated.
+    - Measured on synthetic data (not results): Gaussian 200 × 3078 gave d95 = 183 = 0.92·(n−1); Gaussian 560 × 3078 gave d95 = 494 = 0.88·(n−1). So own-d95 Gaussian controls are expected to be at or near the guard. On the smoke file (non-evidence), the real d95 was 152 of n − 1 = 233 (0.65).
+
+  **Library and implementation facts** (verified by code inspection or by a run on the date stated; they affect validity)
+
+  - *umap-js 1.4.0:*
+    - It initialises the embedding **uniformly at random in [−10, 10]** from the supplied PRNG (`dist/umap.js` line 446: `tauRand(random) * 20 + -10`; read 2026-09-29). It has no spectral initialisation, unlike the `umap-learn` default. Results therefore apply to `umap-js` 1.4.0 and are **not** claimed to generalise to `umap-learn`.
+    - `nEpochs` defaults to 500 for n ≤ 2500 (`getNEpochs`, `dist/umap.js`; read 2026-09-29).
+    - **`nComponents = 1` runs on a toy fixture:** on 2026-09-29, `reduceUmap(X, { dimensions: 1, nNeighbors: 15, minDist: 0.1, seed: 20260723 })` on a 120 × 10 matrix of `randomNormal(makeRandom(20260721))` values returned a 120 × 1 embedding, all values finite, `nEpochs` = 500. This does not prove it works at corpus scale. If the library errors on a corpus recording at d = 1, that run is recorded as "not run: library limitation", with no substitute, and the "not evaluable" rule below applies.
+  - *t-SNE, historical (`tsne-js` 1.0.3):* the root cause of the 3-iteration anomaly in Experiments 002/004 is documented in `tools/lib/reducers.js` (`TSNE_JS_ROOT_CAUSE`): a malformed output kernel ((1 + d²)/α)^β instead of (1 + d²/α)^β in `dist/kl-divergence.js`. This multiplies the gradient by α^((α+1)/2), which is about 6.1e12 at dim 20, so the embedding explodes, the gradient norm becomes exactly 0, and each `_gradDesc` phase exits on its first pass. At dim 2–3 the library does run the full 1000 iterations. `TSNE_JS_ROOT_CAUSE` also lists other defects (non-squared input distances, unseeded `Math.random` init, an inverted gain rule, early stopping).
+    - The test `"tsne-js root cause: dim 20 stops after 3 steps from a ~1e9 gradient; dim 2/3 run in full"` in `tools/test/reducers.test.js` is stated to reproduce this. **This document has not re-run that test file** (parallel-work rule: only one's own test files are run). Its pass/fail status is recorded by the runner at start-up (below).
+    - What this document did check on 2026-09-29: the kernel expression `powseq(divseq(addseq(n, 1), alpha), beta)` is present at `node_modules/tsne-js/dist/kl-divergence.js` line 17. A scratch run of `reduceTsne(X, { engine: "tsne-js", nIter: 1000 })` on a 22 × 200 matrix of `makeRandom(7)` uniform values reported 1000 iterations at dim 2 and dim 3, and 3 iterations at dim 20 with a first gradient norm of 4.8e9. This matches the documented behaviour. It is not an independent derivation of the mechanism.
+    - `tsne-js` is **not used** in this experiment.
+  - *t-SNE, used here (`reduceTsne`, engine `"exact"`), read 2026-09-29:* exact O(n²) gradient; runs exactly `nIter` steps with no early stopping; PCA init scaled so axis 1 has SD 1e-4 (population SD); early exaggeration 12 for 250 iterations; momentum 0.5 then 0.8; learning rate `"auto"` = max(n / 12 / 4, 50), which is 50 for every n ≤ 2400 and so for every recording here; minimum gain 0.01 with delta-bar-delta gains (+0.2 / ×0.8); per-point perplexity binary search (`tsneJointProbabilities`, tolerance 1e-5, at most 100 steps; worst entropy error returned). At the switch from the exaggeration phase to the final phase, momentum and gains restart (update set to 0, gains to 1). The analytic gradient is stated to be checked against finite differences in `tools/test/reducers.test.js` (not re-run here; status logged by the runner).
+    - **`degreesOfFreedom` defaults to 1** in `reduceTsne`. R6 requires max(d − 1, 1), so the runner **must** pass `degreesOfFreedom: "auto"`.
+    - **`perplexity` defaults to min(30, (n − 1)/3)** in `reduceTsne`. The runner passes 30 explicitly. With n ≥ 100 (exclusion rule) the default would also be 30, but it is not relied on.
+    - The `reducers.js` header says these defaults are "intended to mirror scikit-learn's TSNE ... from the scikit-learn documentation as recalled, NOT re-checked". That remains true here (R4).
+
+  **t-SNE requirements (R1–R7)**
+
+  The t-SNE arm uses `reduceTsne` with every setting passed explicitly: `{ engine: "exact", dimensions: d, perplexity: 30, nIter: 1000, earlyExaggeration: 12, exaggerationIterations: 250, learningRate: "auto", momentumEarly: 0.5, momentumFinal: 0.8, minGain: 0.01, degreesOfFreedom: "auto", init: "pca" }`. For **every** t-SNE run, the runner asserts from the returned `details` that each requirement holds. A run that fails an assertion is **invalid**, and counts towards the "not evaluable" rule. If R7 fails, the whole t-SNE arm is reported as **"not run / invalid implementation"**. It is never reported as a win or a loss.
+  - **R1:** exact gradient over all pairs, no Barnes–Hut. Asserted: `details.engine === "exact"`. n ≤ 700 makes exact computation feasible.
+  - **R2:** exactly 1000 gradient iterations executed, with no early stopping. Asserted: `details.iterations === 1000` and `details.nIter === 1000`. The count is logged per run.
+  - **R3:** perplexity 30, with per-point σ found by binary search. Asserted: `details.perplexity === 30`. The binary-search tolerance and step cap are logged, and so is `perplexityWorstEntropyError`.
+  - **R4:** optimisation schedule taken from scikit-learn `TSNE` (≥ 1.2) defaults, used as a reference convention:
+    - early exaggeration 12 for the first 250 iterations;
+    - momentum 0.5 during exaggeration, then 0.8;
+    - learning rate max(n / 12 / 4, 50);
+    - gain adaptation with minimum gain 0.01.
+    - Asserted from `details`: `earlyExaggeration`, `exaggerationIterations`, `momentumEarly`, `momentumFinal`, `minGain` and `learningRate` (compared with max(n/48, 50)).
+    - *These values must be checked against the scikit-learn documentation before the freeze, and that source added to `04_Literature/Literature_Database.md`. They are not yet cited there.* The same check covers the momentum/gain restart at iteration 250. Any deviation from scikit-learn that the check finds is logged as a property of the project implementation. It does not invalidate runs, because the requirement is conformance to this pre-registered schedule, not to scikit-learn.
+  - **R5:** PCA initialisation from the production `pca()` leading d components, rescaled so that column 1 has SD 1e-4 (the scikit-learn convention; verify as in R4). Asserted: `details.init === "pca"`. With PCA init, t-SNE is deterministic, so offset +5 is not used for the main runs. If PCA initialisation cannot be used, random initialisation is seeded from offset +5 and the deviation is documented.
+  - **R6:** Student-t degrees of freedom α = max(d − 1, 1). Asserted: `details.degreesOfFreedom === Math.max(d − 1, 1)`, which requires the runner to pass `"auto"`. `TSNE_JS_ROOT_CAUSE` states that tsne-js uses the same rule. That scikit-learn uses it too is to be verified as in R4.
+  - **R7 (implementation validity check, run-time gate):** runs on a seeded fixture of 3 isotropic Gaussian clusters (n = 300, 50 dims, centres 10 SD apart, seed 20260720 + 900). At d = 2, t-SNE must:
+    - finish with lower KL divergence than at iteration 0 (from `details.history`); and
+    - beat a matched-Gaussian control built from the fixture by ≥ 0.02 in T(k=5), as a single-value margin in the style of Experiment 001.
+    - If either fails, the implementation is declared broken and the t-SNE arm is invalid.
+  - **Start-up test record:** before any corpus run, the runner runs `node --test tools/test/reducers.test.js` and writes the pass/fail status of each test to the JSON. That includes the tsne-js root-cause test, the exact t-SNE iteration-count and finite-difference tests, and the PCA-vs-Jacobi tests. A failure in any t-SNE test makes the t-SNE arm invalid. A failure in any PCA test stops the run.
+
+* **Metrics used to evaluate:**
+  - **Primary: trustworthiness T at k = 5.** This is an exact port of `trustworthiness()` in `tools/run_experiment_001.js`, as read on 2026-09-29:
+
+    T(k) = 1 − (2 / (n·k·(2n − 3k − 1))) · Σᵢ Σ_{j ∈ Uᵢ(k)} (r(i,j) − k)
+
+    - Uᵢ(k) = the embedded k-NN of i that are not among its original-space k-NN.
+    - r(i,j) = the rank of j in i's original-space neighbour ordering, where 1 is the nearest.
+    - Original space: the z-scored matrix with squared Euclidean distance. Embedded space: Euclidean distance.
+    - Distance ties are broken by the lower row index (stable sort).
+    - The formula is valid for k < n/2.
+  - `tools/lib/metrics.js` `trustworthiness` must match this port to ≤ 1e-12 on a fixed fixture. The runner asserts this at start-up.
+  - **Secondary: continuity C at k = 5.** Same formula, with the two spaces swapped: Vᵢ(k) = original k-NN not among the embedded k-NN, ranked in the embedding.
+  - **Sensitivity: T and C at k = 10.**
+  - **Secondary diagnostic, extra rigor: gap-excluded trustworthiness T_gap(k=5).** A project-defined variant, not a literature metric.
+    - For each i, the candidates are restricted to Eᵢ = { j : |tᵢ − tⱼ| ≥ 1.5 s }, the same gap the similarity edges use. Ranks are computed within Eᵢ.
+    - With mᵢ = |Eᵢ|: T_gap = 1 − (1/n′) Σᵢ pᵢ / (k(2mᵢ − 3k + 1)/2), where pᵢ is the usual penalty inside Eᵢ.
+    - Points with mᵢ < 2k are skipped and counted. n′ = the number of points kept.
+    - Control matrices G and P inherit the real rows' timestamps. S and F have their own timestamps from their own PR windowing.
+    - A unit test must show that T_gap with gap 0 equals the standard T to ≤ 1e-12.
+    - Why it exists: it measures whether *non-adjacent* similar moments are kept near each other, and it is not inflated by window overlap. It is not the metric for the similarity edges (see EF).
+  - **Edge fidelity EF (PCA-3D only; governs the similarity-edge wording gate).** A project-defined metric that measures the exported object directly.
+    - For each point i: Aᵢ = the up-to-3 candidates that `buildSimilarityEdges` proposes from i (nearest in the PCA-3D positions among Eᵢ, stable sort by distance). Bᵢ = the min(3, mᵢ) nearest points to i among Eᵢ in the original space (`standardizeFlat(X)`, squared Euclidean, ties to the lower index).
+    - **EF = Σᵢ |Aᵢ ∩ Bᵢ| / Σᵢ |Aᵢ|**: the fraction of exported edge proposals that are also gap-restricted original-space 3-NN of their source point.
+    - The runner computes Aᵢ itself and asserts, on every recording and control, that the de-duplicated union of the Aᵢ equals the output of the exported `buildSimilarityEdges` exactly. So EF is scored on the exact edges that ship.
+    - Reported alongside, not governing: EF_undirected, the fraction of exported undirected edges {a, b} with b ∈ B_a or a ∈ B_b; and the chance level (1/Σᵢ|Aᵢ|) Σᵢ |Aᵢ|·|Bᵢ|/mᵢ, which is the expected EF if proposals were drawn uniformly from Eᵢ.
+    - Controls: G and P get PCA-3D positions from their own `pca()` and inherit X's timestamps. S has its own points and timestamps. EF for a control is computed against that control's own original space. F is reported only.
+    - A unit test on a hand-built fixture checks EF against a hand-computed value.
+  - **Information Preservation Reporting (v0.4):**
+    - for PCA: per-component and cumulative explained variance at d = 1, 2, 3 (production `pca()`) and at d95 (EVD), plus d95 itself and d95/(n−1);
+    - for every candidate: T, C, T_gap.
+  - **Aggregation across recordings:** every per-recording value is written to the results JSON. For each arm the JSON also gives the median, the IQR (Q1 and Q3, linear interpolation) and a 95% percentile bootstrap CI of the median (B = 2000).
+  - **Paired comparisons** use per-recording differences Δᵣ:
+    - `metrics.pairedBootstrapCI` (paired percentile, B = 2000). The **governing statistic is the mean of Δᵣ**. The CI of the median of Δᵣ is reported as a sensitivity check. The CI **width** (upper − lower) is reported for every comparison.
+    - Two-sided Wilcoxon signed-rank (`metrics.wilcoxonSignedRank`). Its zero-handling and exact/normal-approximation choice are recorded in the JSON.
+    - Holm correction over two pre-defined families:
+      - *primary family:* every control comparison for T(k=5) at d ∈ {1,2,3} and d95, plus every leader-vs-passer comparison, plus the PCA-vs-RP comparison at d ∈ {1,2,3};
+      - *secondary family:* all k = 10, continuity, T_gap, EF, surrogate (S and F), axis-subset, d95-variant, clustered-bootstrap and with-demo tests.
+    - Wilcoxon and Holm results are reported as corroboration. **The decision rule uses the bootstrap CIs only.** A CI pass whose Holm-adjusted p is ≥ 0.05 is flagged "fragile" in Discussion.
+  - **Non-independence of recordings (acknowledged limitation, with a sensitivity check):**
+    - The bootstrap treats recordings as independent units. They are not fully independent. The 60 evidence recordings come from 49 distinct observers (`recordistLogin`, read from the manifest on 2026-09-29), and 10 observers contribute more than one recording, sometimes across species (`Corpus_v2.md`). Recordings by the same observer may share device, site and conditions. The CIs may therefore be too narrow.
+    - Species-cluster resampling is ruled out by Rule 001, because it would use species labels.
+    - **Pre-registered sensitivity:** every corpus-level verdict is recomputed with a **cluster bootstrap by `recordistLogin`** (a non-taxon field): resample observers with replacement, and include all of each resampled observer's recordings, paired as usual (B = 2000, seed 20260720 + 703). For the with-demo aggregation, demo files are clustered by their `recordist` string. Any verdict that changes is listed in Discussion. The recording-level verdict governs.
+
+* **Negative control type used:** four kinds of control on the real data, applied to every candidate at every dimension, plus synthetic pipeline controls. Every control goes through the same reducer with the same reducer seed, the same dimension and the same metrics as the real matrix.
+
+  | Control | Construction | Preserves | Destroys | Seed offset | In the pass rule? |
+  |---|---|---|---|---|---|
+  | **Matched Gaussian** (G) | `metrics.randomMatchedMatrix`, which must be an exact port of Exp 001 `randomMatchedMatrix`: `makeRandom(seed)` LCG (1664525, 1013904223, mod 2³²), Box–Muller cosine branch with u₁ clamped to ≥ 1e-12, one draw per cell in row-major order, same n × 3078 as X. The runner asserts equality with the Exp 001 function on a fixture. | shape only | everything else | **+1** | **Yes** |
+  | **Column-permuted** (P) | Each of the 3078 columns of X independently permuted across rows (Fisher–Yates, same LCG); `metrics.columnPermutedMatrix` | each feature's marginal distribution | cross-feature and temporal (overlap) structure | **+2** | **Yes** |
+  | **Phase-randomised surrogate** (S), extra rigor | The recording's own decoded mono 22050 Hz signal: complex FFT (zero-padded to the next power of two), magnitudes kept, phases replaced with i.i.d. uniform [0, 2π) under Hermitian symmetry, inverse FFT, truncated to the original length, then the **full PR front end** (`computeContinuousFrontEnd`: windowing, 20% filter). Needs a complex FFT/iFFT (`tools/lib/fft.js` is magnitude-only today), unit-tested for round-trip error ≤ 1e-9. | the long-term power spectrum (approximately, because of zero-padding and truncation), duration, window-overlap geometry, and stationary background content on average | the temporal organisation of the song **and the amplitude envelope**. The signal becomes stationary, so the 20% RMS filter then selects essentially arbitrary windows. S is therefore a strict *stationary* null. It does not separate "temporal organisation" from "non-stationary energy" (loud vs quiet passages). | **+7** | No; it gates the beyond-overlap and similarity-edge wording (see the decision rule) |
+  | **Frame-shuffle surrogate** (F), extra rigor, reported only | The real recording's STFT frames (from `computeContinuousFrontEnd`'s `spectra`) are permuted in time by one Fisher–Yates permutation π of all frame indices (`makeRandom(seed)`). Then the PR windowing is applied to the shuffled sequence: the same `pointHopFrames` and 6 frames per window, features from the exported `rawSpectrogramFeatures` on the shuffled frames. **Deviation, documented:** `buildContinuousPoints` computes window RMS from the time-domain samples, which cannot be shuffled consistently with overlapping frames. F's window amplitude is therefore the energy mean √(mean of squared `frameRms`) of the 6 carried frames, each frame's `frameRms` taken over its own original 1024 samples. The 20% filter (`amplitudeThreshold`, 0.2) is then applied to these amplitudes. Timestamps = the real windows' timestamps at the same start frames. Unit test: with π = identity, the features are bit-identical to `buildContinuousPoints`' `rawFeature`. The rank correlation between F's amplitude and the production amplitude is logged. | the exact multiset of the recording's real frame spectra (including background and loud or quiet frames), and hence the per-frame spectral content; window-overlap geometry; approximately the window loudness distribution | frame order: temporal organisation beyond a single frame, including the frame-to-frame continuity inside each window | **+8** | No; reported only, not in any gate |
+
+  **Synthetic pipeline controls (extra rigor)** use `tools/lib/synth.js` with its seeded generators, run through `runContinuousSamplingPipelineOnSamples`. These are single signals, so each uses the single-value margin rule (real − control ≥ 0.02), as in Experiment 001.
+  - *Positive control:* `motifSequence` at SNR 30, 15 and 6 dB, 30 s each, seeds 20260720 + 801 / 802 / 803, other parameters at the synth.js `DEFAULTS` recorded in the JSON. Expectation: at 30 dB, at least PCA passes both G and P at d = 3. **If no candidate passes G and P on the 30 dB positive control, the pipeline is declared suspect and the real-data results are not interpreted until this is resolved.**
+  - *Overlap diagnostic:* `whiteNoise` and `pinkNoise`, 30 s each, seeds 20260720 + 804 / 805. They test H3 directly.
+
+* **Negative control random seed:** base 20260720. Per recording r: seed = 20260720 + 1000·r + offset.
+
+  | Offset | Use |
+  |---|---|
+  | +1 | matched-Gaussian matrix G |
+  | +2 | column permutation P |
+  | +3 | UMAP-15 PRNG (the same for X, G, P, S, F and for every d) |
+  | +4 | UMAP-5 PRNG |
+  | +5 | t-SNE PRNG (used only if R5's PCA init is unavailable, and for the random-init stability check below) |
+  | +6 | random-projection matrix R |
+  | +7 | surrogate phases S |
+  | +8 | frame permutation π for F |
+  | o + 10·j, with j ∈ {1, 2, 3} and o ∈ {3, 4, 5, 6} (for example 13, 23, 33 for UMAP-15) | seed-stability repeats (below) |
+
+  Corpus-level (single) seeds. Within this experiment, the offsets ≥ 700 cannot collide with the per-recording offsets (≤ 36), and demo seeds start at 20260720 + 900000:
+  - 20260720 + 701: the compute subset draw.
+  - 20260720 + 702: every recording-level bootstrap. The same seed is used for every CI, so equal-length comparisons share resample index sets.
+  - 20260720 + 703: every observer-cluster bootstrap (sensitivity).
+  - 20260720 + 801 … 805: the synthetic signals.
+  - 20260720 + 900: the R7 fixture.
+
+  The runner asserts that all seeds are unique and writes the full seed table to the JSON.
+* **Negative control metric name:** trustworthiness, k = 5 (the paired difference real − control, per recording).
+* **Negative control numeric result:** Pending run.
+* **Negative control threshold:** the 95% paired-bootstrap CI lower bound of the mean per-recording (T_real − T_control) is **≥ 0.02**, separately for G and for P (see the Pre-Committed Decision Rule).
+* **Negative control pass/fail:** Pending run.
+* **Label-exposure risk step:** z-scoring, every reducer fit (PCA, UMAP, t-SNE, RP), control construction, and metric scoring could see labels if the runner passed them. Species or taxon labels from the manifest are not needed by any of these steps. This experiment makes **no** use of species labels, not even afterwards for inspection. The compute subset (below) is drawn uniformly **without** using labels. The observer field `recordistLogin` (or `recordist` for demo files) is read **only** by the statistics stage, for the cluster-bootstrap sensitivity. It never enters any fit, control or metric.
+* **Label-exclusion verification:**
+  1. Code inspection before the run, dated in Reproducibility Notes. The analysis stage may read only `localPath`, `id`, `sha256`, `fileUrl` / `observationUrl` and `license`. The statistics stage may additionally read `recordistLogin` / `recordist`. Taxon fields (`scientificName`, `taxonName`, `commonName`) are copied into the JSON metadata only by the reporting stage.
+  2. **Label-invariance test (extra rigor):** the first analysed recording is run twice, once with every taxon and label field in an in-memory copy of the manifest replaced by `"REDACTED"`. The SHA-256 of the two per-recording result objects (metadata excluded) must be identical, and the result is logged.
+
+### Confounds (recording condition, SNR, background content)
+
+- **Not measured, not controlled:** per-recording SNR and background content (wind, traffic, water, other bird species, people) are neither measured nor controlled. iNaturalist recordings are field recordings and commonly contain such sources. Recording condition also varies: devices, sites, and codecs. `Corpus_v2.md` notes that codecs and sample rates are unevenly spread across species (for example Luscinia svecica is 4/5 MP3 and Cuculus canorus 4/5 AAC).
+- **The amplitude filter does not remove background:** it drops the quietest 20% of windows, so loud background (and loud non-target birds) is kept.
+- **Consequence:** a pass against G, P, S or F shows that the reducer preserves *within-recording structure of the analysed signal*. It **cannot be attributed to the target species' song**. The structure may come partly or wholly from background sources, other species, or recording artefacts. No result here is described as "song structure" or "bird-specific".
+- **Descriptive SNR proxy (never used in fitting or in the decision):** per recording, the runner logs 20·log10(mean RMS of kept windows / mean RMS of dropped windows) from the production window amplitudes, plus the kept and dropped counts. This is a crude loudness-contrast proxy, not an SNR measurement: it cannot tell the target from loud background. It is reported for inspection only. Any relationship with T is described as descriptive (for example a Spearman ρ with no inferential claim), and it does not enter any verdict.
+
+### Additional pre-registered checks (extra rigor)
+
+- **PR parity check:** on the smoke recording, the runner's production-PCA 3D positions must equal the exporter's exported `position` values to ≤ 1e-9 relative, after the exporter's uniform `POSITION_SPREAD` scaling is undone and per-axis sign is allowed to differ. The runner's similarity edges must equal the exporter's `buildSimilarityEdges` output exactly. If either fails, the run stops: it would mean the benchmark is not measuring what ships.
+- **PCA fidelity check:** for every recording and every input (X, G, P, S, F), production `pca()` at d = 1, 2, 3 is compared with the exact EVD of the same n × n Gram matrix (`ml-matrix` 6.14.0, present in `node_modules` as a transitive dependency: `umap-js` → `ml-levenberg-marquardt` → `ml-matrix ^6.4.1`, per `package-lock.json`, read 2026-09-29; its presence and version are verified at run time and recorded in the JSON). The comparison reports:
+  - explained-variance ratios from both;
+  - the principal angles between the production and EVD subspaces for d = 1, 2, 3;
+  - T(k=5) from both;
+  - the `converged` flags and `nextEigenvalueRatio` of production components 1–3 (and of the λ₄ probe).
+  - If |ΔT| > 0.005 (a quarter of the tie band) on any recording at any d, or if any of components 1–3 is not `converged`, the discrepancy is escalated and both results are reported. The count of such recordings is a headline number in Results.
+  - **The decision uses the production implementation**, because it is what ships. A sensitivity recomputation of every PCA verdict with the EVD embedding is reported. If a verdict changes, it is flagged in Discussion.
+- **Seed stability (stochastic reducers):** on the first 5 analysed recordings, in manifest order, UMAP-15, UMAP-5 and RP are rerun on X with 3 extra seeds (offsets o + 10·j) at d = 1, 2, 3. The SD of T(k=5) across the 4 seeds is reported.
+  - A reducer with SD > 0.01 (half the tie band) on any of these recordings is flagged "seed-sensitive".
+  - A reducer with median SD > 0.02 has its verdicts marked **"unstable"** and escalated.
+  - t-SNE with PCA init is deterministic, so it has no seed to vary. As extra rigor, t-SNE with seeded **random** init (offsets 5, 15, 25, 35) is run on the same 5 recordings. Its T(k=5) SD, and the difference from the PCA-init result, are reported as an initialisation-sensitivity diagnostic, not governing.
+- **PCA axis subsets (for the v2 X/Y/Z toggles):** the viewer can show any non-empty subset of {X, Y, Z}. This assumes the viewer maps X, Y, Z to PC1, PC2, PC3, as the current exporter does (`position = embedding[0..2]`). If the v2 viewer maps them differently, the labels are remapped, not recomputed.
+  - So for PCA, all 7 subsets are evaluated: {1}, {2}, {3}, {1,2}, {1,3}, {2,3}, {1,2,3}.
+  - The controls use the **same component indices** of their own PCA.
+  - Each subset gets its own pass or fail under the same rule. The cross-reducer comparison at d = 1 and d = 2 uses only the leading subsets {1} and {1,2}.
+
+### Pre-run feasibility measurements (not results)
+
+These were measured on 2026-09-29 while writing this pre-registration, on an Apple M2 (8 cores) with Node v24.21.0, single-threaded Node processes, sometimes with another measurement running at the same time. Inputs: seeded Gaussian matrices (`randomNormal(makeRandom(20260721))`, n × 3078), plus the non-evidence smoke file where stated. **These are not results of Experiment 007.** They exist only so that the compute plan rests on measured numbers. Scripts were scratch files outside the repo. The runner's own 2-recording projection governs.
+
+| Measurement | n × dims | Wall-clock | Notes |
+|---|---|---|---|
+| production `pca(X, null)` (auto-95) | 200 × 3078 Gaussian | 21.6 s | d95 = 183; 110 of 183 components converged; 73 hit the 5000-iteration cap. An independent review measured 20.7 s, 183 and 110 on the same shape. |
+| production `pca(X, null)` (auto-95) | 560 × 3078 Gaussian | PCA560_TIME | PCA560_NOTE |
+| production `pca(X, null)` (auto-95) | smoke file, 234 × 3078 | 11.9 s | d95 = 152 (same as EVD); 142 of 152 components converged |
+| Gram + `ml-matrix` EVD (d95 route) | 200 × 3078 Gaussian | 0.09 s + 0.04 s | d95 = 183 |
+| Gram + `ml-matrix` EVD (d95 route) | 560 × 3078 Gaussian | 0.57 s + 0.39 s | d95 = 494 = 0.88·(n−1) |
+| production `pca(X, 3)` | 560 × 3078 Gaussian | 6.0 s | a flat spectrum is the slow case; real data are expected to be faster, but that is not measured |
+| exact `reduceTsne`, d = 3, 1000 iterations, dof "auto" | 450 × 3078 Gaussian | 6.9 s | 1000 iterations executed. An independent review measured about 10.7 s on the same shape. |
+| exact `reduceTsne`, d = 3, 1000 iterations, dof "auto" | 560 × 3078 Gaussian | 30.3 s | measured while the 560-point auto-95 PCA ran concurrently |
+| `reduceUmap` nNeighbors 15, d = 3 | 450 × 3078 Gaussian | 1.9 s | an independent review measured about 2.5 s |
+| `reduceUmap` nNeighbors 15, d = 3 | 560 × 3078 Gaussian | 3.2 s | |
+| `reduceUmap` nNeighbors 5, d = 3 | 560 × 3078 Gaussian | 1.4 s | |
+
+**Resulting estimate (an upper bound, not a measurement of the run):** per recording, t-SNE runs on 5 inputs (X, G, P, S, F) × 3 dims = 15 runs. At the 560-point worst case and ≈ 30 s per run, that is ≈ 7.5 min per recording. For 62 recordings (evidence + demo) all at n = 560, that is ≈ 7.8 h. Most recordings are shorter than the 560-point cap (the median evidence duration is 19.6 s in the manifest; scaling from the smoke file's 234 kept points at 13.7 s gives roughly 335 points), so the real figure should be lower. UMAP (2 variants × 3 dims × 5 inputs = 30 runs per recording, ≤ ≈ 3 s each) adds at most ≈ 1.6 h. The d95 arms cost about 1 s each with EVD. **The 24 h subsetting trigger is therefore not expected to fire.** It stays in place, and the decision about it is made from the runner's own projection.
+
+### Compute plan and pre-stated subsetting (no silent caps)
+
+- **Default:** every candidate runs on every analysed recording.
+- **Main costs:** exact t-SNE (O(n²) per iteration × 1000 iterations) and UMAP's neighbour search on 3078 dims, each run on X, G, P, S and F at 3 dims. Production `pca(·, null)` would have been the largest cost at d95 (feasibility table); it is replaced there by the EVD route.
+- **Projection:** the runner times the first 2 analysed recordings (every arm, including d95 via EVD and the fidelity-check EVDs), projects the total wall-clock time, and logs it.
+- **If the projection exceeds 24 h on the run machine,** UMAP-15, UMAP-5 and t-SNE (only these) run on a fixed seeded subset of m = max(12, ⌈N/4⌉) recordings. N is the number of analysed recordings. The subset is drawn uniformly without replacement (Fisher–Yates, `makeRandom(20260720 + 701)`) **without using labels**.
+  - PCA and RP stay on the full corpus.
+  - Every comparison that involves UMAP or t-SNE is made on the subset, with PCA and RP restricted to the same subset so that the pairing is kept.
+  - PCA's full-corpus verdicts are also reported. If PCA's subset verdict differs from its full-corpus verdict, this is flagged.
+  - The viewer labels use PCA's **full-corpus** verdicts.
+- **If even the subset projects above 48 h,** the run stops and the project owner decides. There is no ad-hoc cap.
+- **Within-recording point subsampling is forbidden,** because it would change the regime.
+- The JSON field `compute_subsetting` records the projection, whether subsetting happened, and the subset's recording IDs.
+
+## Pre-Committed Decision Rule
+
+Defined before any data are seen. It is applied mechanically by the runner, and the results JSON stores both the computed verdicts and the inputs to each verdict. **This rule and the runner code that implements it must be frozen by the project owner before any corpus run** (see "Freeze record" in Reproducibility Notes). Any later change is a dated deviation, never a silent edit.
+
+**Primary metric:** trustworthiness T(k=5), with per-recording pairing, on the primary analysis set (evidence recordings). CI means the 95% percentile paired bootstrap (B = 2000, seed 20260720 + 702) of the **mean** per-recording difference.
+
+**Pass rule, per candidate c and dimension d ∈ {1, 2, 3}:** c **passes** at d if and only if both of these hold:
+- CI lower bound of mean(T_real − T_G) ≥ **0.02**; and
+- CI lower bound of mean(T_real − T_P) ≥ **0.02**.
+
+Any other result is a **fail**. Two special cases:
+- A candidate that could not be run on more than 10% of the recordings it was scheduled for (library error or invalid run) is **"not evaluable"** at that d, not "fail". It is reported explicitly and excluded from winner selection.
+- A candidate that failed on 10% or fewer is evaluated on the recordings where it ran, with the pairing restricted to those recordings, and this is logged.
+
+**Winner rule, per displayed dimension d ∈ {1, 2, 3}:**
+1. Among the passers, the **leader** L is the one with the highest **median** real T(k=5) over the common recording set.
+2. For every other passer c, compute D_r = T_L − T_c and the CI [lo, hi] of mean(D_r). Classify c:
+   - **L better:** lo > 0.02. c is not tied with L.
+   - **Tie (spec rule, unchanged):** the CI intersects **[−0.02, 0.02]**, that is lo ≤ 0.02 and hi ≥ −0.02. c is **tied** with L. Each tie is further classified, and the class is reported with the CI width (hi − lo):
+     - **Equivalent:** the CI lies entirely inside [−0.02, 0.02] (lo ≥ −0.02 and hi ≤ 0.02). This is positive evidence that the two differ by less than the tie band.
+     - **Inconclusive (underpowered):** the CI crosses a band edge (lo < −0.02 or hi > 0.02). The data cannot tell whether the difference is inside or outside the band. **This is never described as evidence that the two are equally good.**
+   - **Inconsistent:** hi < −0.02 (the median ordering and the paired mean disagree). No winner is declared at d. The inconsistency is reported and escalated to the owner.
+3. The **tie set** = {L} ∪ {every c tied with L}. This extends "top two" to all passers, and the leader-vs-runner-up comparison is always reported. The tie set is **equivalent** if every tie in it is equivalent, and **inconclusive** otherwise.
+4. If the tie set is {L} alone (and no inconsistency), L is the **decisive winner** at d.
+
+**What CI width to expect (planning figure, not a power analysis on data):** equivalence is only reachable when the CI's total width is below 0.04. Under a normal approximation to the percentile bootstrap of a mean, the width is about 2 × 1.96 × SD(Δᵣ)/√N. With N ≈ 56–60 analysed recordings, that is about 0.51–0.52 × SD(Δᵣ), so "equivalent" needs roughly SD(Δᵣ) < 0.077 and a mean near 0. On the m = 12 compute subset it is 1.13 × SD(Δᵣ), so "equivalent" needs SD(Δᵣ) < 0.035. SD(Δᵣ) is **unknown** before the run. No pilot on evidence recordings will be run to estimate it, because that would expose results before the freeze. The achieved width is reported for every comparison.
+
+**Pre-stated reasoning for the tie-breaker:** in a tie, **PCA is retained** (spec rule, unchanged). The v2 viewer's 1D and 2D views are nested sub-views of the 3D view (X, Y, Z toggles), and the axis-meaning work (Experiments 008 and 010, pre-registered separately) needs axes that are **linear, orthogonal and nested**: PC1 is the same axis in the 1D, 2D and 3D views, and each axis is a fixed linear recipe over the input features. UMAP and t-SNE have none of these properties. Their d = 1, 2 and 3 fits are separate embeddings with no shared axes, and their axes have no fixed meaning. A tie therefore gives no evidence that would justify giving these properties up. **But an inconclusive tie is not evidence for PCA either.** PCA is retained in that case as the pre-committed default, and the decision is "Needs more testing".
+
+**PCA vs random projection (direct test; answers Question "no" #3):** at every d ∈ {1, 2, 3}, compute the CI [lo, hi] of mean(T_PCA − T_RP) with the same paired bootstrap, **whether or not RP (or PCA) passes its controls**. This comparison is in the primary Holm family.
+- **Distinguishable (PCA better):** lo ≥ 0.02.
+- **Indistinguishable:** the CI lies entirely inside [−0.02, 0.02].
+- **RP better:** hi ≤ −0.02.
+- **Inconclusive:** anything else.
+- This test does not change the reducer choice (RP has no axis meaning), but "indistinguishable" and "RP better" are reported as headline findings and escalated, and "inconclusive" is reported with its CI width.
+
+**Outcomes (exhaustive per displayed dimension d; more than one row can apply, and every applicable row is reported):**
+
+| Case | Pre-committed display decision | Template decision |
+|---|---|---|
+| PCA passes at d and is the decisive winner, or the tie set containing PCA is **equivalent** | PCA retained for display at d. | **Continue** |
+| PCA passes at d and is in an **inconclusive** tie set (PCA as leader or as a tied member) | PCA retained for display at d **as the pre-committed default only**. The notebook and viewer documentation state that PCA is not shown to be as good as the tied candidate(s), and they give the CI and its width. | **Needs more testing** |
+| PCA passes at d, and a non-PCA candidate is the decisive winner or leads a tie set that excludes PCA | **"PCA retained for display only as a documented, quantified trade-off; escalate to the project owner (Needs more testing / owner decision)."** The trade-off is quantified as mean(T_L − T_PCA) with its CI, in both the notebook and the viewer documentation. This applies at d = 3 as specified, and **also at d = 1 and d = 2** (extra rigor). No silent switch in either direction. | **Needs more testing / owner decision** |
+| PCA fails at d while another candidate passes | The view at d is labelled **"not better than random"** in the viewer. The trade-off row above also applies, and it is escalated. | **Reject** (PCA at d, as evidenced display); owner decision on any switch |
+| PCA fails at d | That view is labelled **"not better than random"** in the viewer. This triggers v0.4 Failure Criterion 1 ("random or shuffled data produces manifolds with structure similar to real data") and a **documented methodology review**, not a threshold adjustment. | **Reject** (PCA at d, as evidenced display) |
+| No candidate passes at d | No winner at d. Same labelling and methodology review as above. | **Reject** (all candidates at d) |
+| PCA or another candidate is "not evaluable" at d, or the winner rule is **inconsistent** at d | No winner claimed at d; reported and escalated. PCA's own pass/fail labelling still applies. | **Needs more testing** |
+| PCA vs RP at d is **indistinguishable**, **RP better**, or **inconclusive** | Reported as a headline finding ("PCA is not shown to be better than a random linear projection at d"). PCA retention is not changed, because RP has no axis meaning, but the finding is escalated. | **Needs more testing** (for the claim "PCA adds structure beyond a random linear map") |
+| t-SNE arm invalid (R1–R7 or start-up test failure) | t-SNE reported as "not run / invalid implementation" at every d; the remaining candidates are decided without it, and this is stated next to every verdict. | **Needs more testing** (for the t-SNE comparison) |
+
+**Axis-subset labelling (PCA, for the X/Y/Z toggles):** each of the 7 subsets gets its own pass or fail under the pass rule. Any subset that fails is labelled **"not better than random"** when it is displayed.
+
+**Secondary claim gates (do not change reducer choice; they control what the viewer and exported text may say):**
+- *Beyond-overlap structure:* PCA at d = 3 may be described as preserving structure beyond what a stationary signal with the same long-term spectrum and windowing produces only if the CI lower bound of mean(T_real − T_S) is ≥ **0.02**. Otherwise no such claim is made. F is reported beside it but does not open or close this gate. Even when the gate passes, the claim is about the analysed signal, not the target species (see Confounds).
+- *Similarity-edge wording:* the default wording for the exported similarity edges (k = 3 in PCA-3D, ≥ 1.5 s gap) is **"closest in this 3D projection"**.
+  - The wording may be upgraded to at most **"similar spectrogram content (in the analysed feature space)"** only if EF passes **all three** of G, P and S: the CI lower bound of mean(EF_real − EF_control) ≥ **0.02** for each.
+  - **No outcome of this experiment permits perceptual wording** such as "these two moments sound alike" or "sound similar". Perceptual similarity is untested here, and no perceptual evidence or literature row is cited for it. (The phrase "these two moments sound alike" appears in a code comment in `tools/export_single_recording_dataset.js`, `buildSimilarityEdges`. This experiment does not support that phrase; it is noted for the claims audit, Experiment 011.)
+  - T_gap(k=5) against G, P and S is reported beside EF as supporting evidence, but it does not open the gate, because it measures k = 5 neighbourhoods and not the exported k = 3 edges.
+
+**Sensitivity, reported and not governing:**
+- Every verdict is recomputed with T(k=10), with the median-of-differences CI, with the own-d95 control variant, with the EVD PCA embedding in place of production `pca()`, with the observer-cluster bootstrap, and on the with-demo set (evidence + 2 demo files, which includes the development-exposed smoke/demo file). Any verdict that changes is listed in Discussion. The k = 5 mean-difference verdict on the evidence recordings governs.
+- If a winner on T(k=5) has continuity C(k=5) below PCA's outside the tie band, the trade-off between false neighbours and missed neighbours is reported.
+
+**Auto-95 reference (PCA only, no winner):**
+- PCA at d95 (EVD route) is tested against its controls with the same pass rule, subject to the near-full-rank guard (descriptive only when d95 ≥ 0.9·(n−1) on more than half the recordings).
+- The "display loss" mean(T_d95 − T_3) and its CI are reported (tests H4). These feed the "Why 3D?" open question and do not decide anything here. T_3 here is production `pca()`; the same loss computed with EVD at d = 3 is reported beside it.
+
+**Disqualification:** a candidate that fails its controls at d is not eligible to win at d, whatever its real-data score. (This does not exclude it from the direct PCA-vs-RP test.)
+
+## Expected Outcome
+
+- **Support for keeping PCA as the display reducer:**
+  - PCA passes G and P at d = 1, 2 and 3;
+  - at every displayed d, PCA is the decisive winner or in an **equivalent** tie set;
+  - PCA is distinguishable from RP at every displayed d;
+  - the 30 dB positive control passes;
+  - the PR parity and PCA fidelity checks pass.
+- **Partial support, escalated:**
+  - PCA passes, but a non-linear reducer beats it outside the tie band at some d. PCA is then kept only as a documented, quantified trade-off pending the owner's decision.
+  - PCA passes, but a tie involving PCA is inconclusive, or PCA vs RP is not "distinguishable". PCA is kept as the pre-committed default, and the decision is "Needs more testing".
+- **Failure (v0.4 Failure Criteria):**
+  - PCA does not beat the matched-Gaussian or column-permuted control at a displayed d. That view is "not better than random", and a documented methodology review follows.
+  - The positive control fails for all candidates. The pipeline is suspect, and no real-data interpretation is made.
+  - The label-invariance test fails. Rule 001 has been violated, and the run is void.
+  - The run was started before the freeze, or the frozen hashes do not match at run time without a recorded deviation. The run is not a pre-registered result, and it is reported as exploratory.
+- **Pre-stated interpretation for H3:** if white or pink noise and the surrogates pass G and P, then "passes G and P" shows only that the view is better than a structureless matrix. Only the surrogate gate, EF and T_gap can support any wording about beyond-overlap structure, and even then not about bird-specific structure (Confounds). This would be a legitimate and important finding, not a failed experiment.
+
+⸻
+
+## Results
+
+Pending run. The results will be written to `05_Benchmark_Results/v2/experiment_007_reducer_rebenchmark_production_regime.json`. Tables here will link to that file and not duplicate it.
+
+## Unexpected Observations
+
+Pending run.
+
+## Discussion
+
+Pending run.
+
+Limitations pre-stated now, so they are not discovered after the fact:
+- **Scope of the results:**
+  - Results apply to the PR front end, within-recording fits, and these library versions (`umap-js` 1.4.0 with random init, the project's exact `reduceTsne`).
+  - They do not apply to cross-recording shared embeddings, whose comparison views need their own benchmark.
+  - The feature set is fixed at production (D-010 not re-tested; see "Why this experiment exists").
+  - No individual-bird claims (D-008). A recording is not evidence of a single individual, and nothing here speaks to individual identity.
+- **Corpus limits:**
+  - The corpus is small (12 species × 5 recordings) and was curated for licence clarity.
+  - Recordings are not independent: 49 observers for 60 recordings (see the cluster-bootstrap sensitivity).
+  - Recording condition, SNR and background content are not controlled (see Confounds). No pass can be attributed to the target species' song.
+- **What the metrics do and do not measure:** trustworthiness, continuity, T_gap and EF measure the preservation of neighbourhoods in the z-scored log1p-spectrogram feature space. They do not measure biological meaning or perceptual similarity. Nothing here shows that neighbours in the view are biologically or perceptually similar.
+- **Power:** a tie is split into "equivalent" and "inconclusive". An inconclusive tie retains PCA only by pre-committed default.
+
+## Decision
+
+Pending run. The decision will be applied mechanically from the Pre-Committed Decision Rule, using the "Template decision" column (Continue / Reject / Needs more testing / owner decision) for each displayed d.
+- **Decision log:** it feeds the proposed **D-014** (display reducer and dimensionality, production regime, within-recording). D-004 would get a pointer to D-014 and would not be overwritten.
+- **Viewer:** the "not better than random" labels, the similarity-edge wording gate, and the beyond-overlap gate are the concrete changes that follow.
+
+## Reproducibility Notes
+
+- **Runner:** `tools/experiments/run_experiment_007_reducer_rebenchmark_production_regime.js` (not yet written).
+- **Results:** `05_Benchmark_Results/v2/experiment_007_reducer_rebenchmark_production_regime.json` (not yet produced).
+- **Manifest:** `manifest_v2_corpus.json`. Its SHA-256, recording count, species count and per-recording source URL and licence are logged in the JSON.
+- **PR constants** are read from `tools/export_single_recording_dataset.js`, not re-typed: 22050 Hz, FFT 1024, hop 512, Hamming window, 6 frames per point, base point hop 2 frames, `MAX_POINTS` 700, amplitude filter 0.2, `POSITION_SPREAD` 6, similarity k 3, gap 1.5 s. The runner logs the values it actually used.
+- **Implementation under test:**
+  - The git blob hashes (`git hash-object`) of `tools/lib/reducers.js`, `tools/lib/metrics.js`, `tools/lib/synth.js`, `tools/export_single_recording_dataset.js` and the runner, and whether each matches HEAD. For reference only: `tools/lib/reducers.js` in the working tree had blob hash `5d7e3596af48e27378b95214b1f8317d0c9a8090` on 2026-09-29, uncommitted and still being edited by other work. The run-time value is the one that counts.
+  - `PCA_TOLERANCE`, `PCA_MAX_ITERATIONS` and the per-component `converged` flags, iterations, residuals and `nextEigenvalueRatio` for every production `pca()` call.
+  - Every t-SNE run's full `details` object, minus `history` beyond iterations 0, 250 and 999, plus the R1–R6 assertion outcomes.
+  - The start-up `node --test tools/test/reducers.test.js` per-test status.
+- **Environment:**
+  - Node (v24.x; exact version logged).
+  - ffmpeg/ffprobe **only** via `tools/lib/ffbin.js` (`FFMPEG`, `FFPROBE`; version via `ffmpegVersion()` logged).
+  - `umap-js` 1.4.0, `ml-matrix` 6.14.0 (d95 and the fidelity check).
+  - The git commit hash and a dirty-tree flag. If the tree is dirty, the SHA-256 of `git diff` is logged.
+- **Seeds:** the full table in Method, written to the JSON. Base 20260720.
+- **Statistics:** `tools/lib/metrics.js` (percentile bootstrap, paired bootstrap, Wilcoxon, Holm). B = 2000, α = 0.05.
+- **Label-exclusion code inspection:** date and inspector to be recorded here at run time.
+- **Per-run logging:** wall-clock time, the executed t-SNE iteration count (asserted to be 1000), UMAP epochs, PCA convergence diagnostics, the SNR proxy, d95/(n−1), and every exclusion, skip and invalid run with its reason.
+- **Unit tests** (in `tools/test/`) that must pass before the run:
+  - T/C port equivalence;
+  - `metrics.randomMatchedMatrix` equals the Exp 001 function;
+  - T_gap(gap 0) equals T;
+  - EF on a hand-computed fixture, and the Aᵢ-union equals `buildSimilarityEdges`;
+  - complex FFT round-trip;
+  - F windowing with π = identity reproduces `rawFeature`;
+  - seed uniqueness;
+  - R7 t-SNE validity.
+
+### Freeze record (to be completed by the project owner before any corpus run)
+
+- **Requirement:** before the first corpus run, the owner freezes (a) this notebook's pre-registration and (b) the runner code, including the module that implements the decision rule. Either commit both and record the commit hash here, or record the SHA-256 of both files here with the date.
+  - The "pre-registration span" of this notebook is everything from the first line up to (not including) the line `## Results`, with the `**Date:**` and `**Status:**` lines excluded, so that filling in Results and Status later does not break the hash.
+  - The runner computes the SHA-256 of the pre-registration span and of its own source files at start-up, writes them to the JSON (`preregistration.hashes`), and compares them with the values recorded here. If they do not match and there is no recorded deviation, the runner refuses to run, or with an explicit override flag marks the whole output "exploratory, not pre-registered".
+- **Freeze date / commit / hashes:** not yet frozen.
+- **Owner statement required at freeze:** whether any evidence recording has been run through the PR pipeline, or any Exp 007 metric computed on it, before the freeze (see the disclosure in Method).
+- **Deviations from the pre-registration:** none yet. Every later change to the rule, thresholds, metrics, controls, corpus or runner decision code must be entered here with the date, what changed, why, and whether any results had been seen at the time. The original text is kept, not overwritten.
+
+### Pre-registration revision history
+
+- **2026-09-29, v1:** initial pre-registration.
+- **2026-09-29, v2 (before any run and before the freeze), after internal review.**
+  - Corrected the PCA description to the current tolerance-based power iteration, with convergence logging.
+  - Named the real reducer functions and made the runner assert R1–R6 conformance, including `degreesOfFreedom: "auto"`.
+  - Replaced the unverified tsne-js mechanism with a pointer to `TSNE_JS_ROOT_CAUSE`.
+  - Split ties into equivalent and inconclusive, and added a direct PCA-vs-RP test.
+  - Replaced the perceptual edge wording with the EF metric and an S-inclusive gate.
+  - Moved d95 to an exact EVD, with a near-full-rank guard.
+  - Added a confounds section with an SNR proxy.
+  - Added the freeze requirement and the demo/smoke exposure disclosure. The primary set is now the evidence recordings, and the with-demo set is a sensitivity check.
+  - Added the feasibility timings, the observer-cluster bootstrap sensitivity, the D-010 and D-008 statements, the frame-shuffle surrogate F, and the Template-decision column.
+  - No threshold was changed.

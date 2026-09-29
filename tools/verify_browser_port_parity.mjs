@@ -23,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzeSamples } from "../app/src/analysis/pipeline.ts";
+import ffbin from "./lib/ffbin.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AUDIO = process.argv[2] ?? path.join(ROOT, "sample-test-audio", "MicrosoftTeams-video.mp3");
@@ -39,7 +40,7 @@ const reference = JSON.parse(fs.readFileSync(DATASET, "utf8"));
 
 // Exactly the command readFullAudio() in the exporter runs.
 const raw = execFileSync(
-  "ffmpeg",
+  ffbin.FFMPEG,
   ["-hide_banner", "-loglevel", "error", "-i", AUDIO, "-ac", "1", "-ar", String(reference.sampleRate), "-f", "f32le", "pipe:1"],
   { maxBuffer: 1024 * 1024 * 256 },
 );

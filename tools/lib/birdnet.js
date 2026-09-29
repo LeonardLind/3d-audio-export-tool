@@ -18,6 +18,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { execFileSync } = require("child_process");
+const { FFMPEG } = require("./ffbin");
 
 const MODEL_DIR = path.join(__dirname, "..", "models");
 const MODEL_PATH = path.join(MODEL_DIR, "BirdNET_v2.4_fp32.onnx");
@@ -113,7 +114,7 @@ function sigmoid(x) {
 // from the visualization pipeline's own (22.05kHz) decode in export_single_recording_dataset.js.
 function readAudioAt48k(audioPath) {
   const buffer = execFileSync(
-    "ffmpeg",
+    FFMPEG,
     ["-hide_banner", "-loglevel", "error", "-i", audioPath, "-ac", "1", "-ar", String(BIRDNET_SAMPLE_RATE), "-f", "f32le", "pipe:1"],
     { maxBuffer: 1024 * 1024 * 256 },
   );

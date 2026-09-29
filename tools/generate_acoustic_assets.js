@@ -35,6 +35,7 @@ const { runContinuousSamplingPipeline } = require("./export_single_recording_dat
 const { probeAudioSource } = require("./lib/audio_source");
 const { validateExport } = require("./lib/validate");
 const { upsertDataset } = require("./lib/manifest");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 // Bumped only when the shape of acoustic-analysis.json changes in a way a consumer must
@@ -128,7 +129,7 @@ function parseArgs(argv) {
 function writePlaybackCopy(sourcePath, outDir, format) {
   const target = path.join(outDir, `playback.${format}`);
   execFileSync(
-    "ffmpeg",
+    FFMPEG,
     ["-hide_banner", "-loglevel", "error", "-y", "-i", sourcePath, "-vn", "-b:a", "192k", target],
     { maxBuffer: 1024 * 1024 * 16 },
   );

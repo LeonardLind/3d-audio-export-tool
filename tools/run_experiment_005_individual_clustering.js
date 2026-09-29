@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { pca, standardize, makeRandom } = require("./lib/reducers");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 const ASSET_ROOT = path.join(ROOT, "Assets", "slice_2_acoustic_data");
@@ -177,7 +178,7 @@ const HAMMING = Array.from(
 );
 
 function readWindowSamples(audioPath, startSeconds) {
-  const buffer = execFileSync("ffmpeg", [
+  const buffer = execFileSync(FFMPEG, [
     "-hide_banner",
     "-loglevel",
     "error",

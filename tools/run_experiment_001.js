@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 function argValue(name, fallback = null) {
@@ -83,7 +84,7 @@ function parseCsv(text) {
 }
 
 function readWindowSamples(audioPath, startSeconds) {
-  const buffer = execFileSync("ffmpeg", [
+  const buffer = execFileSync(FFMPEG, [
     "-hide_banner",
     "-loglevel",
     "error",

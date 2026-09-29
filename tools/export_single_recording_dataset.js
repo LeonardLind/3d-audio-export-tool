@@ -14,6 +14,7 @@ const { reduceFeatures } = require("./lib/reducers");
 const { makeFft } = require("./lib/fft");
 const { buildAnalysis } = require("./lib/analysis");
 const { probeAudioSource } = require("./lib/audio_source");
+const { FFMPEG } = require("./lib/ffbin");
 
 const ROOT = path.resolve(__dirname, "..");
 const AUDIO_ID = process.argv[2] || "4_2MM06988_20250412_033000";
@@ -165,7 +166,7 @@ function dominantCommonName(detections) {
 
 function readFullAudio(audioPath, sampleRate) {
   const buffer = execFileSync(
-    "ffmpeg",
+    FFMPEG,
     ["-hide_banner", "-loglevel", "error", "-i", audioPath, "-ac", "1", "-ar", String(sampleRate), "-f", "f32le", "pipe:1"],
     { maxBuffer: 1024 * 1024 * 64 },
   );
@@ -602,9 +603,6 @@ function runContinuousSamplingPipeline({
   source,
 }) {
   const sampleRate = analysisSampleRate;
-  const frameHopSeconds = HOP_SIZE / sampleRate;
-  const framesPerPoint = Math.max(1, Math.round(POINT_WINDOW_SECONDS / frameHopSeconds));
-  const freqs = binFrequencies(sampleRate);
   // What the file itself contains, before ffmpeg resamples it to the analysis rate. Passed
   // in by callers that already probed (so the generator UI doesn't probe twice); probed
   // here otherwise. Never fatal -- the pipeline runs fine without it, we just can't then
@@ -619,6 +617,29 @@ function runContinuousSamplingPipeline({
   }
 
   const samples = readFullAudio(audioPath, sampleRate);
+  return runContinuousSamplingPipelineOnSamples({
+    samples,
+    sampleRate,
+    audioId,
+    commonName,
+    generatedFrom,
+    audioUrl,
+    source: sourceInfo,
+  });
+}
+
+// Front half of the continuous pipeline, on samples already decoded at `sampleRate`:
+// STFT -> per-frame descriptors/flux -> fixed-grid windows -> amplitude noise filter. Stops
+// BEFORE PCA. Exported (v2.0) so analysis code that needs the pipeline's internal per-frame
+// series and the exact window grid (e.g. tools/lib/window_descriptors.js) reads the same
+// numbers the shipped export uses instead of re-deriving them. Pure: no filesystem access.
+// Each window's startFrame = round(emissionTime / frameHopSeconds); allContinuousPoints are
+// the windows BEFORE the amplitude filter, rawPoints the ones that survive it.
+function computeContinuousFrontEnd({ samples, sampleRate = DEFAULT_ANALYSIS_SAMPLE_RATE, audioId = "win" }) {
+  const frameHopSeconds = HOP_SIZE / sampleRate;
+  const framesPerPoint = Math.max(1, Math.round(POINT_WINDOW_SECONDS / frameHopSeconds));
+  const freqs = binFrequencies(sampleRate);
+
   const spectra = stft(samples);
   const frameFlux = spectralFluxPerFrame(spectra);
   const frameSeries = analyzeFrames(spectra, samples, freqs);
@@ -636,6 +657,49 @@ function runContinuousSamplingPipeline({
   // (likely silence/background) before PCA sees them -- see constant comment above.
   const amplitudeThresholdValue = amplitudeThreshold(allContinuousPoints, AMPLITUDE_FILTER_PERCENTILE);
   const rawPoints = allContinuousPoints.filter((point) => point.amplitude >= amplitudeThresholdValue);
+
+  return {
+    sampleRate,
+    frameHopSeconds,
+    framesPerPoint,
+    pointHopFrames,
+    freqs,
+    spectra,
+    frameFlux,
+    frameSeries,
+    allContinuousPoints,
+    amplitudeThresholdValue,
+    rawPoints,
+  };
+}
+
+// The same pipeline as runContinuousSamplingPipeline, on an in-memory mono signal instead of
+// a file (v2.0: synthetic controls in tools/lib/synth.js run through EXACTLY the shipped
+// pipeline). runContinuousSamplingPipeline is now a thin wrapper that decodes the file and
+// calls this, so both entries produce the identical payload for the same samples. `samples`
+// must already be mono at `sampleRate`; `source` is optional file metadata (null for
+// synthetic input, which has no source file to probe).
+function runContinuousSamplingPipelineOnSamples({
+  samples,
+  sampleRate = DEFAULT_ANALYSIS_SAMPLE_RATE,
+  audioId,
+  commonName,
+  generatedFrom,
+  audioUrl,
+  source = null,
+}) {
+  const sourceInfo = source ?? null;
+  const {
+    frameHopSeconds,
+    pointHopFrames,
+    freqs,
+    spectra,
+    frameFlux,
+    frameSeries,
+    allContinuousPoints,
+    amplitudeThresholdValue,
+    rawPoints,
+  } = computeContinuousFrontEnd({ samples, sampleRate, audioId });
 
   const featureMatrix = rawPoints.map((point) => point.rawFeature);
   const spectralDescriptors = wholeRecordingDescriptors(frameSeries);
@@ -840,6 +904,40 @@ function extractContinuousWindows(audioPath) {
   };
 }
 
-module.exports = { runContinuousSamplingPipeline, extractContinuousWindows };
+// v2.0: the internals are exported (additively) so v2 analysis code and the synthetic
+// controls reuse the shipped formulas instead of re-implementing them. The first two
+// exports are unchanged.
+module.exports = {
+  runContinuousSamplingPipeline,
+  extractContinuousWindows,
+  runContinuousSamplingPipelineOnSamples,
+  computeContinuousFrontEnd,
+  readFullAudio,
+  stft,
+  analyzeFrames,
+  spectralFluxPerFrame,
+  buildContinuousPoints,
+  rawSpectrogramFeatures,
+  binFrequencies,
+  buildPanelSeries,
+  buildSimilarityEdges,
+  wholeRecordingDescriptors,
+  amplitudeThreshold,
+  frameRms,
+  frameCentroid,
+  DEFAULT_ANALYSIS_SAMPLE_RATE,
+  FFT_SIZE,
+  HOP_SIZE,
+  POINT_WINDOW_SECONDS,
+  POINT_HOP_SECONDS,
+  MAX_POINTS,
+  PCA_DIMENSIONS,
+  POSITION_SPREAD,
+  SIMILARITY_NEIGHBORS,
+  SIMILARITY_MIN_TIME_GAP_SECONDS,
+  AMPLITUDE_FILTER_PERCENTILE,
+  ROLLOFF_PERCENT,
+  CONFIDENCE_THRESHOLD,
+};
 
 if (require.main === module) main();

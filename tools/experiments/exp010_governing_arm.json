@@ -1,0 +1,11 @@
+{
+  "experiment": "010",
+  "governing_arm": "A2",
+  "approval": {
+    "approver": "Leonard Lind (project owner)",
+    "date": "2026-09-29",
+    "channel": "working session with Claude Code (chat)",
+    "decision_text": "Approve A2 (phase-randomised AAFT surrogates, B = 9999) as the governing arm of Experiment 010, with A1 computed and reported as non-decisional only. Thresholds unchanged. Earlier the same day the owner approved A1; after critique showed A1's calibration could not be checked, the owner approved A2 as the deciding method.",
+    "notebook": "03_Research_Notebook/Experiment_010_Axis_Meaning.md"
+  }
+}
