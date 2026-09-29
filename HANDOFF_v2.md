@@ -2,6 +2,8 @@
 
 Written 2026-09-29 so a new Claude session, possibly on another computer, can continue the v2.0 upgrade of this export tool. Read all of it before doing anything.
 
+> **Current state (commit `63077d1` on `v.2.0`).** Phases 0–2 are done (section 4). **Next step:** set up (section 1), run the checks in section 5, then start **Phase 3, running Experiments 007–012** (section 6). No experiment has been run yet. If `git checkout v.2.0` finds no such branch, the owner has not pushed it from the first Mac yet (`git push -u origin v.2.0`); ask them to.
+
 ## 0. Scope and non-negotiables
 
 - **Work only in this repo, `3d-audio-export-tool`, on branch `v.2.0`.** Never edit `revx-greencubes`, the production app. You may *read* it to keep the export compatible.
