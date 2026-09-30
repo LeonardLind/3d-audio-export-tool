@@ -1,0 +1,6 @@
+.frame { position: fixed; inset: 0; pointer-events: none; z-index: 8; border: 5px solid transparent; border-image: repeating-linear-gradient(135deg,#edbf58 0 6px,#322b20 6px 12px) 5; }
+.banner { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #302719; color: #ffe2a1; padding: 3px 12px; font-size: 10px; white-space: nowrap; }
+.panel { position: absolute; right: 18px; top: 160px; z-index: 6; width: 245px; max-height: 45vh; overflow: auto; padding: 10px; border: 1px solid #645130; border-radius: 8px; background: #17150ff2; color: #dfcda7; font-size: 11px; }
+.panel summary { cursor: pointer; } .panel label { display: flex; align-items: center; gap: 5px; margin-top: 10px; }
+.panel p { color: #aa9e86; } .panel dl div { margin: 8px 0; } .panel dd { margin: 3px 0; color: #aa9e86; overflow-wrap: anywhere; }
+@media(max-width:700px) { .panel { width: 158px; right: 10px; top: 174px; } .banner { max-width: 100%; white-space: normal; width: max-content; text-align: center; } }

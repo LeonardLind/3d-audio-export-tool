@@ -1,0 +1,2125 @@
+{
+ "amendments": [
+  {
+   "id": "C01",
+   "title": "Random numbers for every governing stream: Philox4x32-10",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "SEED-1 (seeds)",
+    "SEED-2",
+    "SEED-3",
+    "SEED-6",
+    "SEED-7",
+    "SEED-8",
+    "SEED-11",
+    "MISSED-seeds-1",
+    "MISSED-seeds-2",
+    "MISSED-seeds-4"
+   ],
+   "owner_decision": "OD-1",
+   "why": "SEED-1 (seeds), SEED-2, SEED-3, SEED-6, SEED-7, SEED-8, SEED-11 and the seeds-lens missed items: the legacy generators (32-bit LCG makeRandom, mulberry32) have one short cycle, so different seeds were shown to give overlapping, shifted copies of the same random numbers (009 calibration, 010 noise and backgrounds, 007/008/009/012 controls), and several draws named no generator at all.",
+   "change_text": "Amendment C01 (OD-1). (1) Generator. Every random draw that feeds a v2 result comes from Philox4x32-10 (Salmon, Moraes, Dror & Shaw 2011, \"Parallel random numbers: as easy as 1, 2, 3\", SC11, DOI 10.1145/2063384.2063405), implemented in tools/lib/rng.js. This covers negative controls (matched Gaussian, column permutation, label shuffles), surrogates (phase-randomised, AAFT, frame shuffles), calibration matrices and graphs, every bootstrap (ordinary, paired, observer-cluster), chance and null draws, compute-subset draws, random offsets, random projections, synthetic signals and their noise, backgrounds and jitter, decoy and packet draws, and the seeds of stochastic reducers where the library accepts a random function. (2) Key and counter. A stream is identified by the key (k0, k1) = (seed, subStream). seed = the value already given in this notebook's seed table (a 32-bit unsigned integer; no seed value changes). subStream = a 32-bit unsigned index, 0 unless the C01 note of this notebook assigns another value. The 128-bit counter starts at 0 and increases by 1 for each 4-word output block (word 0 is the least significant, with carry into words 1 to 3). Distinct (seed, subStream) keys give distinct streams that are not segments of one shared cycle, and one stream cannot wrap (2^128 blocks). (3) Consumption. A stream's 32-bit words are used in order: block 0 words 0 to 3, then block 1 words 0 to 3, and so on. Each draw takes the next unused words. When a notebook uses one seed for several fits or calls (for example the same reducer seed for X, G, P, S and F, or the same bootstrap seed for every CI), each fit or call starts a fresh stream with that key at counter 0, exactly as the legacy makeRandom(seed) restarted per call. (4) Uniform double in [0, 1): take the next two words a, then b; u = ((a >>> 5) * 2^26 + (b >>> 6)) / 2^53. (5) Standard normal: take the next two uniforms u1, then u2; u1 = max(u1, 1e-12); z = sqrt(-2 ln u1) * cos(2 pi u2) (Box-Muller cosine branch; the sine value is not used). Matrices of normals are filled row-major, as metrics.randomMatchedMatrix does, unless this notebook states another order. (6) Derived draws: integer in [0, m) = floor(u * m); uniform on [lo, hi) = lo + (hi - lo) * u; uniform phase = 2 pi u; Fisher-Yates shuffle of m items: for i = m - 1 down to 1, swap item i with item floor(u * (i + 1)); a column-permuted matrix shuffles columns in order 0 to d - 1 from one stream, as metrics.columnPermutedMatrix does. (7) Bootstraps: resample index = floor(u * n), for resamples b = 1 to B in order and positions i = 1 to n within each; each CI call starts a fresh stream from (bootstrap seed, 0), so comparisons of equal length that share a seed still share resample index sets, as pre-registered. (8) Constructions are unchanged apart from the uniform source: G is i.i.d. N(0,1) of the same shape by (5), row-major; P is per-column Fisher-Yates by (6). (9) Synthetic signals (tools/lib/synth.js, v2 mode): the signal stream uses key (seed, 0) and the background stream key (seed, 1); normals by (5), uniforms by (4). (10) Legacy generators. metrics.makeRandom (the Experiment 001 LCG) and synth.mulberry32 stay in the code only to reproduce pre-v2 results (for example the unit test that metrics.randomMatchedMatrix equals the Experiment 001 function). No v2 runner may use them for any governing stream. (11) No silent default seeds. In a v2 runner, a call that omits a seed is an error: synth DEFAULTS seed 1, reducers `seed ?? 0` and metrics DEFAULT_SEED may not be used. In reduceFeatures, a namespaced seed or dimensions value that differs from the top-level value is an error. For every UMAP, random-projection and random-initialised t-SNE run, the runner asserts that the returned details.seed equals the seed-table value. (12) Tests that must pass before the run: rng.js reproduces the official Random123 known-answer vectors for philox4x32 10 (https://raw.githubusercontent.com/DEShawResearch/random123/main/tests/kat_vectors), for example key 00000000 00000000 with counter 0 gives 6627e8d5 e169c58d bc57ac4c 9b00dbd8; determinism for a fixed key; the v2 matched-Gaussian and column-permutation constructors, given the legacy LCG as their uniform source, reproduce the Experiment 001 functions bit for bit (so only the source changed); the seed-uniqueness test also asserts that every (seed, subStream) key this experiment uses is distinct, so streams cannot overlap by construction, and that no legacy generator is reachable from the v2 governing code. (13) Unchanged: every pass/fail threshold, every B value, every statistic, every seed value and every seed offset. Numbers quoted in this notebook from pre-registration scratch runs that used the legacy generators are planning figures only; the runner regenerates them with Philox.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:126 \"`random = makeRandom(seed)`\" (UMAP PRNG); 007:129 \"entries i.i.d. N(0, 1/d) from `makeRandom(seed)` + `randomNormal`\"; 007:229 \"`makeRandom(seed)` LCG (1664525, 1013904223, mod 2³²)\" and \"The runner asserts equality with the Exp 001 function on a fixture\" (layout kept, uniform source replaced; the Exp 001 equality stays a legacy unit test); 007:230 \"(Fisher–Yates, same LCG)\"; 007:231 \"phases replaced with i.i.d. uniform [0, 2π) under Hermitian symmetry\" (no generator was named); 007:232 \"(`makeRandom(seed)`)\" for π; 007:320 \"`makeRandom(20260720 + 701)`\"; 007:259 \"The runner asserts that all seeds are unique\" (extended to keys); 007:476 \"seed uniqueness;\" (extended).",
+     "extra": "C01 note for 007. subStream is 0 for every seed-table value, except the H3 controls of the surrogate S (Amendment C09): S's own matched Gaussian uses the recording's +1 seed with subStream 1 and S's own column permutation the +2 seed with subStream 1. S phases (offset +7): FFT length N = the next power of two at or above the signal length; bins 0 and N/2 keep their original values; bins k = 1 to N/2 - 1 get phase 2 pi u in ascending k with their magnitudes kept; bin N - k is set to the complex conjugate of bin k. F (offset +8): one Fisher-Yates permutation of all frame indices by C01 (6). Random projection (offset +6): entries z / sqrt(d) from C01 (5), filled column by column (as 007:129). t-SNE random initialisation (offsets +5, 15, 25, 35): entries 1e-4 * z, row-major. UMAP (offsets +3, +4 and their repeats): umap-js receives the C01 (4) uniform function of key (seed, 0). Subset draw (+701) and bootstraps (+702, +703): key (seed, 0). Synthetic signals (seeds +801 to +805): synth v2 mode. R7 fixture: see Amendment C09. The feasibility inputs at 007:151, 007:154 and 007:297 used legacy generators and stay planning facts only."
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:149 \"G_exp = `metrics.randomMatchedMatrix(X, EXPORT_CONTROL_SEED)`\" (now the C01 constructor); 008:254 \"`makeRandom(seed)` LCG (1664525, 1013904223, mod 2³²)\"; 008:255 \"(Fisher–Yates, same LCG)\"; 008:256-257 \"As G\" (G_exp, G_A, G_B now from Philox); 008:330 \"`makeRandom(20260720 + 704)`\"; 008:288 \"The runner asserts that all seeds are unique\" (extended to keys); 008:545 \"Seed uniqueness.\" (extended).",
+     "extra": "C01 note for 008. subStream is 0 for every seed. G_exp uses key (20260720 + 990, 0); the 5-seed alternative uses keys (20260720 + 990 ... 994, 0). The shape-only property stated at 008:154 still holds for the C01 constructor, so fallback F1 stays exact and the separate-process, all-zeros, bitwise F1 check (008:309-313) is unchanged. The scratch values at 008:92-95, 008:399 and 008:528 (G_exp iteration counts, ratios 0.00310 / 0.00306 / 0.00306, T 0.52 to 0.56) were produced with the legacy LCG stream; they do not describe the v2 G_exp and stay planning facts; the runner recomputes them as F1 table entries. The control-draw grid seeds 20260720 + 600 ... 619 are 20 distinct keys, so their streams cannot overlap (the legacy-LCG overlap between seeds +600 and +611 no longer applies)."
+    },
+    {
+     "notebook": "009",
+     "supersedes": "009:172 \"sample min(k, |Eᵢ(g)|) members of Eᵢ(g) uniformly without replacement, using a partial Fisher–Yates shuffle\" (no generator named; now Philox); 009:215 \"This is an exact port of Experiment 001's `randomMatchedMatrix`: LCG 1664525 / 1013904223 mod 2³²\"; 009:216 \"(Fisher–Yates, `metrics.makeRandom(seed)`)\"; 009:260 \"4000 independent matched-Gaussian matrices\" (independence now holds by construction); 009:232 \"The runner asserts that all seeds are unique\" (extended to keys); 009:481 \"seed uniqueness\" (extended); 009:490 \"`makeRandom`\" in the statistics list.",
+     "extra": "C01 note for 009. This amendment is also Amendment A1.1 to Amendment A1: title the subsection \"### Amendment C01 (2026-09-29, before any run): random numbers, Philox4x32-10 (also Amendment A1.1 to Amendment A1)\", and add after the A1 Status bullet (009:379) the marker \"*[Supplemented by Amendment C01 (= A1.1), 2026-09-29.]*\". Calibration Gaussian matrices: keys (20260720 + 1000*(1000 + 20q + j) + 1, 0); calibration label shuffles: (... + 2, 0); calibration graphs: see Amendment C30. Distinct keys make the 4000 calibration matrices non-overlapping by construction, so \"independent\" at 009:260 now holds. Control (a) in the run uses the same C01 constructor with keys (20260720 + 1000*(500 + j) + 1, 0), so calibration and run use the same Gaussian source. Chance draws (+3), label shuffle (b) (+2), column permutation (c) (+4) and stability-null draws (+5): one stream per recording and offset, key (seed, 0), consumed in the fixed orders stated at 009:226-228. Bootstraps: key (20260720 + 909, 0), fresh for each CI. Synthetic signals (r = 500 + j): synth v2 mode. Unchanged: 200 replicates x 20 seeds, the [0.904, 0.996] band, alpha = 0.05, every threshold and the fallback. The design-check counts at 009:99-106 came from legacy-generator fixtures and are regenerated by the runner (as 009:99 already says)."
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:313 \"seeded stream from the table below\" (generator and draw order now fixed); 010:314 \"Draw n standard normal values\"; 010:315 \"replace the phase by an independent uniform phase on [0, 2π)\"; 010:166 \"o_r is drawn uniformly from the integers in [L, n − L]\"; 010:169 \"20 further offsets per recording (seed offsets +50 … +69)\"; 010:171 \"disjoint from the V2(a) seeds\" (now disjoint as streams, not only as seed values); 010:235 \"+0 | synthetic signal generator seed\" (synth v2 mode); 010:269 \"The runner asserts that all seeds are unique\" (extended to keys); 010:567 \"seed uniqueness;\" (extended).",
+     "extra": "C01 note for 010. This amendment is also the dated amendment to A2's surrogate generation: title the subsection \"### Amendment C01 (2026-09-29, before any run): random numbers, Philox4x32-10 (also the dated amendment to A2 surrogate generation)\". A2: for each unit, axis c in {1, 2, 3} and surrogate b in {1, ..., 9999}, the stream key is (the unit's A2 seed from the table: offset +10, +11, +12, +15, +16 or +100 + r', subStream = 10000*(c - 1) + b). Each surrogate stream first draws the n standard normals of step 1 by C01 (5), then the ceil(n/2) - 1 phases of step 2 as 2 pi u for k = 1 to ceil(n/2) - 1 in ascending k. Each surrogate therefore depends only on its key, so results cannot depend on worker count or scheduling. V2(b) o_r (offset +5) and each V2(b-rep) offset (+50 to +69): o_r = L + floor(u*(n - 2L + 1)) from one uniform. circularShiftNull (offsets +4, +7, +8, +13, +14) stays exhaustive while D <= 999; if it ever samples, it uses key (seed, 0). Synthetic pseudo-recordings (r = 1000 to 1259 and 2000 to 2199): synth v2 mode, signal subStream 0, background subStream 1; every V1, V2(a) and V2(a-ext) signal and background stream is therefore distinct by construction (this removes the legacy overlaps between noise signals and between V1 backgrounds). Bootstraps, including the V2(c) cluster bootstrap by scores-recording: key (20260720 + 702, 0), fresh for each CI. Unchanged: B = 9999, Holm over 36, alpha = 0.01, every gate, and tools/experiments/exp010_governing_arm.json. The per-unit timings at 010:368-379 used a prototype and stay planning figures."
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:275 \"**PRNG:** `metrics.makeRandom` (the Experiment 001 LCG) for decoy allocation, crops, opaque ids, shuffles, derangements and the property test. `synth.js` uses its own mulberry32 for the signals\"; 011:274 \"The runner asserts that all seeds actually used are unique\" (extended to keys); 011:473 \"seed uniqueness;\" (extended); 011:466 \"`makeRandom`\" in the statistics list.",
+     "extra": "C01 note for 011. Every draw listed at 011:275 uses Philox with key (the listed corpus-level seed, 0). Swap-control derangement (+1101): repeat a full Fisher-Yates shuffle from the same stream until it has no fixed point. A1(j) property test (+1107): the first half of the seeded values are u by C01 (4) and the second half are 20000*u. Synthetic fixtures (+1110 to +1135) and synthetic decoys: synth v2 mode. The edge-fixture pilot values (011:423-426) came from legacy-generator signals; the runner re-derives them (Amendment C34)."
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:169 \"drawn from `synth.mulberry32(20260720 + 120100 + s)`\"; 012:175 \"synth.js adds background from its own random stream\" (now subStream 1 of the seed); 012:369-371 misaligned-truth null draws (no generator or order named); 012:381 \"an exact port of Experiment 001's `randomMatchedMatrix` (LCG 1664525 / 1013904223 mod 2³², ...)\"; 012:382 \"(Fisher–Yates, same LCG)\"; 012:383 \"phases replaced with i.i.d. uniform [0, 2π)\" (generator now named); 012:402 \"The runner asserts that all seeds are unique\" (extended to keys); 012:599 \"seed uniqueness.\" (extended).",
+     "extra": "C01 note for 012. clickTrain (seeds 20260720 + 120000 + s) and motifSequence (20260720 + 120300 + s): synth v2 mode, signal subStream 0, background subStream 1. Click-time jitter: u_i = 0.25*u from key (20260720 + 120100 + s, 0), in click order i = 0, 1, .... Misaligned-truth null (20260720 + 120200 + s and 120250 + s): per click in order, first the sign (sigma_c = +1 if u < 0.5, else -1), then the magnitude v_c = lo + (hi - lo)*u for that band's interval. Part B: G_w and P_w keys (20260720 + 1000*r + {21 ... 24} or {31 ... 34}, subStream by input: 0 = X_w, 1 = S_w, 2 = white noise, 3 = pink noise; see Amendment C09). S phases (+41): the construction stated in 007's C01 note. White and pink noise (+51, +52): synth v2 mode. Bootstraps: key (20260720 + 712, 0), fresh for each CI."
+    }
+   ],
+   "strictness": "Implements owner decision OD-1: it only changes where the uniform numbers come from, makes independence true by construction, forbids silent seeds and adds tests; no threshold, B, statistic or seed value changes."
+  },
+  {
+   "id": "C02",
+   "title": "Freeze of pre-registration, runner and code before the first run",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "FRZ-1",
+    "FRZ-2",
+    "FRZ-3",
+    "APPR-08",
+    "MISSED-ids-3",
+    "MISSED-ids-6",
+    "MISSED-approvals-5"
+   ],
+   "owner_decision": "OD-2",
+   "why": "FRZ-1, FRZ-2, APPR-08 and missed items: only 007 had a freeze, its span left out shared libraries and pre-registered text, run-time fields sat inside the hashed span, and nothing checked hashes against a stored reference.",
+   "change_text": "Amendment C02 (OD-2). (1) What is frozen. Before this experiment's first real (corpus) run, the project owner freezes: (a) its pre-registration; (b) its runner or runners; (c) every repo module under tools/ in each runner's require graph (for example tools/lib/reducers.js, metrics.js, synth.js, rng.js, window_descriptors.js, fft.js, tools/export_single_recording_dataset.js and any new tools/lib module) and every repo data or config file the runner reads; plus the resolved name, version and integrity (from package-lock.json) of each third-party package the runner loads (not the whole lockfile), and the SHA-256, version string, platform and architecture of the ffmpeg and ffprobe binaries the runner resolves through tools/lib/ffbin.js. (2) Extent of the pre-registration (stricter reading, see Strictness). OD-2 names the notebook up to the line \"## Results\"; because its exclusions name fields that also lie after that line, the whole notebook file is frozen, except only: the **Date:** line; the **Status:** line; lines appended directly below a line that reads, or ends with, \"Pending run.\" or states that a value is \"to be recorded here at run time\" or \"to be filled in at run time\"; the value fields of the Freeze record; and the dated, append-only Deviations list. Nothing else may change after the freeze. Stricter than OD-2's minimum: any arm whose output enters a verdict or gate (synthetic, calibration, fixture or corpus) also waits for the freeze; unit tests and smoke tests on the smoke file may run before it. (3) How it is recorded. The freeze is a commit the owner approves. It adds tools/experiments/exp0NN_freeze.json (NN = this experiment) holding: owner, date, the freeze commit, the SHA-256 of the canonical frozen notebook text, the anchor lines where append-only insertions are allowed, the git blob hash of each frozen file, the package list with name, version and integrity, the ffmpeg/ffprobe binary records, and the experiment-specific references below. Canonical text: the notebook's UTF-8 content with CRLF normalised to LF, split into lines, with the excluded lines and every appended block removed, joined with LF. (4) What the runner does. At start-up the runner computes all of these values, writes them to the results JSON (preregistration.hashes), and refuses to run on any mismatch with the sidecar or on any uncommitted change to a frozen file. Only an explicit override flag lets it run; the whole output is then marked \"exploratory, not pre-registered\" and may never feed a verdict, a Decision Log row, an evidence block or any viewer or exported text. (5) The commit that adds the results JSON must have the freeze commit as an ancestor (git merge-base --is-ancestor); otherwise the result is void. (6) Any change after the freeze is a dated entry in the Deviations list, with what changed, why, and whether results had been seen; the original text is kept.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:481 \"(a) this notebook's pre-registration and (b) the runner code, including the module that implements the decision rule. Either commit both and record the commit hash here, or record the SHA-256 of both files here with the date.\"; 007:482 \"everything from the first line up to (not including) the line `## Results`, with the `**Date:**` and `**Status:**` lines excluded\"; 007:483 \"compares them with the values recorded here\" (reference values now in tools/experiments/exp007_freeze.json); 007:331 \"This rule and the runner code that implements it must be frozen\" (wider set); 007:456 \"The git blob hashes ... and whether each matches HEAD\" (now enforced, not only logged).",
+     "extra": "Sidecar: tools/experiments/exp007_freeze.json. 007 keeps its owner exposure statement (007:485); it must cover the exposures in Amendment C17. The freeze also waits for Amendment C27 (placeholder at 007:302 resolved; scikit-learn check recorded). Update the Status line to: \"**Status:** Pre-registered; consistency-amended 2026-09-29 (see \\\"Pre-run consistency amendments\\\"); not yet run; not yet frozen (Amendment C02). No run of a governing arm may start before the freeze.\" Revision-history entry (007:488): \"2026-09-29, pre-run consistency amendments C01, C02, C03, C07, C08, C09, C10, C11, C12, C13, C14, C15, C16, C17, C27 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2, OD-3 applied.\""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:6 Status line (\"Pre-registered, not yet run\"; no freeze was defined); 008:523-524 blob hashes and dirty flag \"logged\" only (now enforced).",
+     "extra": "Sidecar: tools/experiments/exp008_freeze.json. The F1 lookup table file, if the runner loads one, is a frozen data file. Add a \"### Freeze record\" subsection at the end of Reproducibility Notes with the value fields \"Freeze date / commit / sidecar: not yet frozen.\" and \"Deviations from the pre-registration: none yet.\" Update the Status line as in 007's note (same text). Revision-note entry (after 008:546): \"2026-09-29, pre-run consistency amendments C01, C02, C03, C06, C07, C08, C10, C11, C12, C13, C14, C16, C17, C20, C25, C28 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2, OD-3 applied.\""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "009:6 Status line; 009:430 \"`amendments`: A1 text hash\" (scope and reference were undefined); 009:126 and 009:379 \"The runner still verifies the sign-off fields\" (now verified against the sidecar record).",
+     "extra": "Sidecar: tools/experiments/exp009_freeze.json. It also holds a machine-readable A1 sign-off record (approver \"Leonard Lind (project owner)\", date 2026-09-29, quoted approval \"Approve 009-A1\"), the OD-1 approval of A1.1, and the reference A1 text hash. A1 text = the canonical lines from the line beginning \"### Amendment A1 (dated 2026-09-29, before any run)\" up to, not including, the line \"## Expected Outcome\". The --calibrate step and the pilot run only after the freeze. Add a \"### Freeze record\" subsection at the end of Reproducibility Notes (value fields and Deviations list, as for 008). Update the Status line as in 007's note. Revision-log entry (009:495): \"2026-09-29, pre-run consistency amendments C01, C02, C07, C08, C11, C12, C15, C18, C29, C30 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2 applied.\""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:6 Status line; 010:350 ancestor check of the governing-arm commit only (extended to the freeze commit).",
+     "extra": "Sidecar: tools/experiments/exp010_freeze.json. tools/experiments/exp010_governing_arm.json is a frozen config file (see Amendment C31). Checkpoints record the freeze hashes (Amendment C18). Add a \"### Freeze record\" subsection at the end of Reproducibility Notes. Update the Status line as in 007's note. Create the revision log required by Amendment C32 and add: \"2026-09-29, pre-run consistency amendments C01, C02, C03, C07, C08, C11, C12, C18, C20, C21, C22, C31, C32, C33 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2, OD-3 applied.\""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:6 Status line; 011:181 \"fixed and hashed (`templatesSha256`) before the run\" (no place for the reference value); 011:321 \"`templatesSha256` and `generatorBlobHash` at scoring time equal those recorded at generation time\" (kept, and now also equal to the freeze record).",
+     "extra": "Sidecar: tools/experiments/exp011_freeze.json, holding one append-only freeze record per audit run (each entry of runs[]): templatesSha256, generatorBlobHash, checker blob hash, the template/denylist file and the runner. Each run, including every fix-and-re-run under 011:327, needs its own owner-approved freeze record before generation and before any review packet is released. Add a \"### Freeze record\" subsection at the end of Reproducibility Notes. Update the Status line as in 007's note. Revision-log entry (011:475): \"2026-09-29, pre-run consistency amendments C01, C02, C03, C04, C07, C08, C11, C12, C19, C20, C21, C22, C23, C24, C25, C26, C34 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2, OD-3, OD-4 applied.\""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:6 Status line; 012:589 commit and dirty flag \"logged\" only (now enforced); 012:295 \"the capture method is written into a dated amendment to this notebook before the check runs\" (that amendment must be frozen before A.8 runs).",
+     "extra": "Sidecar: tools/experiments/exp012_freeze.json. The frozen set covers both runners (the main runner and tools/experiments/run_experiment_012_browser_parity.js), so Playwright (owner-approved, dev-only) must be installed and its package name, version and integrity frozen before 012's freeze. The OD-5 binary record (Amendment C05) is part of the sidecar. Add a \"### Freeze record\" subsection at the end of Reproducibility Notes. Update the Status line as in 007's note. Revision-log entry (012:601): \"2026-09-29, pre-run consistency amendments C01, C02, C05, C07, C08, C09, C10, C11, C12, C13, C14, C19, C20, C35 after an independent 12-agent audit; no threshold changed; owner decisions OD-1, OD-2, OD-5 applied.\""
+    }
+   ],
+   "strictness": "Implements owner decision OD-2 and only adds checks; where OD-2's wording could be read two ways, the wider frozen set and the earlier freeze point are taken."
+  },
+  {
+   "id": "C03",
+   "title": "Viewer label for a non-pass view; gates keyed to verdicts, not strings",
+   "notebooks": [
+    "007",
+    "008",
+    "010",
+    "011"
+   ],
+   "finding_ids": [
+    "LBL-1",
+    "APPR-01",
+    "APPR-02",
+    "SD-1",
+    "SD-2",
+    "XREF-1",
+    "XREF-2",
+    "MISSED-approvals-4",
+    "MISSED-cross-2"
+   ],
+   "owner_decision": "OD-3",
+   "why": "LBL-1, APPR-01, APPR-02, SD-1, SD-2, XREF-1, XREF-2 and two missed items: 007 labels every fail \"not better than random\", 008 allows that phrase only when U <= 0, and 010's gate and 011's S2b matched the text string, so a failed axis could slip through and the no-007 case was handled three ways.",
+   "change_text": "Amendment C03 (OD-3). (1) Verdicts are unchanged. 007's per-subset verdicts against G and P (pass, fail, not evaluable, descriptive only; 007:335-341) and 008's per-view verdict against G (pass, inconclusive, fail; 008:343-350) are computed exactly as pre-registered. (2) For display, each of the three CIs, 008-G, 007-G and 007-P, is classified by 008 rule 1: pass if L >= 0.02; inconclusive if L < 0.02 <= U; fail if U < 0.02. The view's joint outcome is the worst of the three (fail < inconclusive < pass). A 007 subset that is not evaluable or descriptive only, a missing 007 result, and an active 007/008 mismatch suspension are never a pass. (3) Label text (008's exact wording governs): joint inconclusive gives \"below the pre-committed margin (inconclusive)\". Joint fail gives, for each control named, \"not shown to beat a random matrix by the 0.02 margin\" if that control's worst CI has U > 0, and \"not better than a random matrix of the same size\" only if that CI has U <= 0. When the worst outcome comes from P, \"a random matrix\" is replaced by \"a column-shuffled copy of the features\"; if a G CI and a P CI share the worst outcome, both controls are named, each with its own form, in one label. The words \"not better than random\" are used only when U <= 0. (4) The set of views with a non-pass label never shrinks: every view that is a non-pass in 007 (against G or against P) or in 008 (against G) carries a non-pass label whenever it is displayed, for every recording. Every consequence of a 007 fail is unchanged: v0.4 Failure Criterion 1, the documented methodology review, the Reject template decision, and no per-recording flag shipped for that view. (5) The per-recording \"weak for this recording\" flag (008 rule 3) may be shown for a view only if the view's joint outcome is pass and 008 rule 3 allows it. (6) While 007 has not run or is not decided, no view has a joint pass: a view whose 008-G outcome is a non-pass carries that 008 label; any other view shows only the measured numbers of 008 rule 5, with no verdict label and no per-recording flag. (7) Gates in other experiments read verdicts, never label strings. 010's Experiment 007 gate is met for axis c only if 007's results JSON gives PCA subset {c} the verdict \"pass\" against both G and P and no 007/008 mismatch suspension is active; anything else (fail, not evaluable, descriptive only, missing, suspended, or 007 not run) means no label on axis c. 011's S2b reads the joint outcome and its exact label text from the export and fails closed unless Experiments 007 and 008 are both decided (Amendment C26).",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:22 \"so that view is \\\"not better than random\\\"\"; 007:372 and 007:373 \"That view is labelled **\\\"not better than random\\\"** in the viewer\"; 007:379 \"Any subset that fails is labelled **\\\"not better than random\\\"** when it is displayed.\"; 007:410 \"That view is \\\"not better than random\\\"\"; 007:447 \"the \\\"not better than random\\\" labels\" (display wording only; verdicts unchanged).",
+     "extra": "State that 007's own verdicts, its Failure Criterion trigger, its methodology review and its Template decisions are unchanged; only the display text follows C03 (3)."
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:355 \"(read from 007's results JSON)\" with no rule for a missing file (now C03 (6)); 008:375 \"the view passed rule 1\" and 008:418 \"a view that does not pass rule 1\" (now: joint outcome pass, C03 (5)).",
+     "extra": "The viewPreservation export block (008:509) carries, per view, the joint outcome, its exact label text, whether the per-recording flag may be shown, and the SHA-256 of the 007 and 008 results files it was built from."
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:403 \"a label on axis c is shipped only if Experiment 007 has run and its single-axis subset {c} for PCA was **not** labelled \\\"not better than random\\\"\" and \"Experiment 008's per-recording weak-view flag, if adopted, is shown next to the caption\"; 010:459 \"Experiment 007 gate: as defined above.\"",
+     "extra": "The 008 weak-view flag may be shown next to an axis caption only where C03 (5) allows it."
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:187 S2b precedence sentence \"if Experiment 007 labels subset A \\\"not better than random\\\", S2b must say so, whatever the Experiment 008 flag ... If Experiment 007 is not decided, only the Experiment 008 wording is used.\"",
+     "extra": "S2b's facts, gates and payload source are fixed in Amendment C26."
+    }
+   ],
+   "strictness": "Implements owner decision OD-3: no verdict or threshold changes, the set of labelled non-pass views cannot shrink, and every gate becomes at least as strict as before."
+  },
+  {
+   "id": "C04",
+   "title": "Human review of description text, per language",
+   "notebooks": [
+    "011"
+   ],
+   "finding_ids": [
+    "APR-1",
+    "APPR-03",
+    "APPR-04",
+    "APPR-11",
+    "CODE-3",
+    "XREF-15",
+    "MISSED-approvals-2",
+    "MISSED-regime-5"
+   ],
+   "owner_decision": "OD-4",
+   "why": "APR-1, APPR-03, APPR-04, CODE-3, XREF-15 and missed items: 011 let ES/PT text ship with only a machine-assisted note and let an AI agent judge lay readers' paraphrases, against the consequence the owner accepted on 2026-09-29, which 011 never recorded.",
+   "change_text": "Amendment C04 (OD-4). (1) Owner statement, recorded: on 2026-09-29 the owner stated that AI agents cannot fill the human roles of this audit, and that until humans do, the description text is generated but not shown to visitors. The owner arranges the reviewers. (2) Per-language display. The text in a language (EN, ES or PT) is shown to visitors only after that language's own human checks pass. EN may go live before ES or PT. For every language: A4(b) with the required human lay readers of that language all answering \"yes\", and every paraphrase judged \"same meaning\". For ES and PT in addition: the A5 verdict \"faithful\" for every template, from a human fluent in EN and that language. (3) The translation route is closed. A language without a human A5 \"faithful\" verdict may still be generated, and translationStatus[lang] may store \"machine-assisted, not verified by a fluent reviewer\", but that text is never displayed. Such a language is reported as \"not shown: awaiting fluent human review\", never as \"pass\" and never as shipped with a note. (4) Every A4(b) \"same meaning / different meaning\" judgement is made by a human fluent in the language of the paraphrase. (5) AI agents do only mechanical checks: numbers against facts, the denylist scans, gate re-evaluation and the controls, under the disclosure and model-family rule of 011:207. The judgement checks A3(b) and A6 are made by humans. An AI agent's answer in any human role counts as \"not reviewed\". (6) Until the required humans are available, readabilityStatus[lang] = \"not reviewed\" and nothing in that language is displayed (011:346, unchanged).",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "011:210 \"If no fluent human reviewer is available for a language, that language is **flagged** as `\\\"machine-assisted, not verified by a fluent reviewer\\\"`. This is the only permitted non-pass route (see the Decision Rule).\"; 011:209 \"The A2 reviewer judges each paraphrase \\\"same meaning / different meaning\\\".\"; 011:208 A3(b) \"the A2 reviewer answers\" and 011:211 A6 \"the A2 reviewer checks the wording\" (now humans); 011:310 \"A5 \\\"faithful\\\" in ES and PT from a human fluent reviewer, or the language is flagged (see below)\"; 011:339-344 \"Translation route (the only non-pass route) ... the template may ship in that language only if ... the viewer shows a visible note\"; 011:360 \"Ship per the translation route, with the visible note. Report as flagged.\"",
+     "extra": "Replace the effect of the 011:360 outcome row with: \"Preconditions hold; a language lacks a human A5 'faithful' verdict: that language is generated and not displayed; reported as 'not shown: awaiting fluent human review'.\" The translationStatus values in the schema (011:126) stay; \"machine-assisted\" no longer permits display. Owner approval line: OD-4, Leonard Lind (project owner), 2026-09-29, working session."
+    }
+   ],
+   "strictness": "Implements owner decision OD-4: it removes a display route and moves judgement roles to humans, so it can only withhold text."
+  },
+  {
+   "id": "C05",
+   "title": "ffmpeg reference binary for Part A",
+   "notebooks": [
+    "012"
+   ],
+   "finding_ids": [
+    "APPR-07",
+    "CODE-1",
+    "MISSED-approvals-5"
+   ],
+   "owner_decision": "OD-5",
+   "why": "APPR-07, CODE-1 and a missed item: 012 names ffmpeg 6.0 in its hypotheses, scope and verbatim user caveat, but the reference machine runs ffmpeg 6.1.1 and a different ffprobe build.",
+   "change_text": "Amendment C05 (OD-5). (1) Part A certifies exactly the ffmpeg binary it runs on, identified at run time by the ffmpegVersion() string, the binary's SHA-256, process.platform and process.arch; the ffprobe binary is identified the same way. The owner-approved reference machine is this Windows PC; on 2026-09-29 it resolved \"ffmpeg version 6.1.1-essentials_build-www.gyan.dev\" through ffmpeg-static on win32-x64, and ffprobe from @ffprobe-installer/win32-x64. (2) Every \"ffmpeg 6.0\" in the hypotheses, the scope and the word-for-word user caveat names instead the build that actually ran, filled in by the runner. V = the certifying binary's ffmpegVersion() first line up to, not including, \" Copyright\". The caveat is, verbatim: \"Audio offsets verified against V decoding only. Browser playback alignment is not verified for this file format.\" (3) A pass covers shipped exports only if they were produced with that same binary (same SHA-256). Any other machine or binary (for example the Mac with the ffmpeg 6.0 recorded in manifest_v2_corpus.json) that later produces shipped exports must pass Part A on its own build first (012:490 applies). (4) Before Part A, the runner re-derives decodedSamples22050 for every manifest file and the pre-counted exclusion and cap/overlap tables on the certifying binary, and logs every difference from the manifest and from this notebook as a deviation. (5) The encoder and decoder facts at 012:38 and 012:202-203 were read from the darwin-arm64 build; the runner logs the -encoders and -decoders lists and the soxr status of the certifying binary, and stops if an encoder named in the conditions table is missing.",
+   "per_notebook_edits": [
+    {
+     "notebook": "012",
+     "supersedes": "012:22 \"the bundled **ffmpeg 6.0**\"; 012:38 \"The binary is ffmpeg-static `6.0`. soxr is not compiled in (checked with `-version` on 2026-09-29).\"; 012:102 H-A2 \"ffmpeg 6.0 decode\"; 012:105 and 012:107 H-A3 \"ffmpeg 6.0\"; 012:113 H-A6 \"as ffmpeg 6.0\"; 012:202-203 encoder/decoder lists of the darwin-arm64 build; 012:292 \"Part A measures ffmpeg 6.0 decoding\"; 012:479 \"**ffmpeg 6.0-decoded timeline**\"; 012:481 verbatim caveat \"Audio offsets verified against ffmpeg 6.0 decoding only. Browser playback alignment is not verified for this file format.\"; 012:486 \"the bundled ffmpeg-static `6.0` binary\"; 012:557 \"against **ffmpeg 6.0** decoding\"; 012:585 \"bundled ffmpeg (`6.0`) and ffprobe (`n4.4.1`)\"; 012:586 darwin-arm64 paths; 012:135-148 and 012:317-324 pre-counts \"computed from `decodedSamples22050`\" (re-derived on the certifying binary).",
+     "extra": "Owner approval line: OD-5, Leonard Lind (project owner), 2026-09-29, working session. The binary record is stored in the freeze sidecar (Amendment C02) and must equal the run-time binary."
+    }
+   ],
+   "strictness": "Implements owner decision OD-5: the scope stays one tested binary, the caveat names the binary that was tested, and no tolerance or check changes."
+  },
+  {
+   "id": "C06",
+   "title": "008 d95 compared like with like",
+   "notebooks": [
+    "008"
+   ],
+   "finding_ids": [
+    "D95-1",
+    "APPR-06",
+    "SD-3",
+    "XREF-4",
+    "CODE-2"
+   ],
+   "owner_decision": "strict default pending owner",
+   "why": "D95-1, APPR-06, SD-3, XREF-4, CODE-2: 008 defines d95 with production pca(X, null) but cross-checks it against 007's exact-EVD d95, so a pure method difference could suspend 008's governing verdicts.",
+   "change_text": "Amendment C06 (strict default, pending owner decision). (1) Definition. In this experiment d95 means exactly Experiment 007's definition (007:138): the smallest component count with cumulative explained variance >= 0.95, capped at n - 1, from an exact eigendecomposition (ml-matrix 6.14.0 EVD with assumeSymmetric: true, version verified at run time) of the n x n Gram matrix of standardizeFlat(X). It applies both when d95 is read from 007's results JSON and when 008 computes d95 itself. (2) Like-with-like cross-check. On the first 2 analysed recordings, 008 recomputes d95 by this EVD route. Any difference from 007's value is a 007/008 mismatch, with the consequence of 008:307 unchanged. (3) The pca(X, null) trigger stays exactly as written, not relaxed. On the same 2 recordings, 008 also computes d95 with production pca(X, null); any difference from 007's d95 is also a 007/008 mismatch and suspends as 008:307 states. Until the owner decides otherwise, such a suspension is not lifted because the difference is attributed to unconverged components. (4) The pca(X, null) d95 and its count of non-converged components among the d95 components are reported under a separate key (d95_production), marked \"approximate\" if any component did not converge. It enters no verdict. (5) When 007's results JSON does not exist when 008 runs, the checks in (2) and (3) are made by the consistency step of Amendment C14. (6) Experiment 009's E95 d95 (009:141) is the production value, a different quantity, and is never compared with this d95.",
+   "per_notebook_edits": [
+    {
+     "notebook": "008",
+     "supersedes": "008:220 \"the smallest component count with cumulative EV ≥ 0.95 (`pca(X, null)`)\"; 008:221 \"If 007's JSON does not exist, 008 computes d95 itself\" (now by EVD); 008:222 \"If any is non-converged, d95 is marked **\\\"approximate\\\"**\" (now applies to d95_production); 008:319 and 008:323 \"`pca(X, null)` for d95 if 007's value is not available\" (d95 now by EVD; pca(X, null) only on the 2 cross-check recordings).",
+     "extra": "Keep 008:306-307 unchanged. The d95 in the JSON (008:457) is the EVD value; add the key d95_production."
+    }
+   ],
+   "strictness": "Strict default pending owner decision: it adds a like-with-like check and keeps the pre-committed pca(X, null) trigger and its suspension exactly as written."
+  },
+  {
+   "id": "C07",
+   "title": "Provisional Decision-Log IDs",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "ID-1",
+    "APPR-19",
+    "SD-11",
+    "XREF-21",
+    "CODE-22",
+    "INC-4"
+   ],
+   "owner_decision": "none",
+   "why": "ID-1, APPR-19, SD-11, XREF-21, CODE-22, INC-4: the notebooks proposed decision IDs in two conflicting ways (by experiment number and by closing order), and 007, 008 and 011 did not say that the owner assigns the final number.",
+   "change_text": "Amendment C07. Provisional Decision-Log IDs, by experiment number and whatever the closing order: Experiment 007 -> D-014; Experiment 008 -> D-015; Experiment 009 -> D-016; Experiment 010 -> D-017; Experiment 011 -> D-018; Experiment 012 Part A -> D-019 (Part B proposes no entry). The final numbers are assigned by the project owner when the rows are added to 07_Decision_Log/Decision_Log.md. Cross-references name the experiment first, for example \"Experiment 007's decision (provisionally D-014)\". Any later renumbering is a dated entry in the Deviations list, never a rewrite.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:5 \"(provisional; the ID is assigned only when results come in, and may change if another v2 experiment closes first)\".",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:5 \"IDs are assigned only when results come in, and the order may change if another v2 experiment closes first.\"",
+     "extra": ""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "none (009:5 already matches); add the full map and the owner-assignment sentence next to 009:5.",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:5 \"**D-0NN: plain-language axis labels in exports ...** NN is the next free number ≥ 14 when results come in. ... so this is expected to be D-016 or later.\"; 010:534 \"the proposed **D-0NN**\".",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:5 \"The ID is assigned only when results come in, and it may change.\" (the owner assigns it).",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:5 \"**D-0NN: compare-mode audio-offset convention** ... Experiments 009 and 010 each propose a D-0NN, so this is expected to be D-017 or later.\"; 012:269, 012:473, 012:476 and 012:570 \"D-0NN\" (read as the provisional D-019).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Documentation only; no rule or threshold changes, and the owner keeps the final numbering."
+  },
+  {
+   "id": "C08",
+   "title": "Seed index conventions are experiment-local",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "SEED-1 (ids-paths-freeze)",
+    "APPR-25",
+    "SD-7",
+    "XREF-22",
+    "CODE-21",
+    "SEED-9"
+   ],
+   "owner_decision": "none",
+   "why": "SEED-1 (ids-paths-freeze), APPR-25, SD-7, XREF-22, CODE-21, SEED-9: demo indices and corpus-level seed meanings differ between notebooks; nothing collides, but the hand-off asked for identical shared definitions.",
+   "change_text": "Amendment C08. Seed index conventions are experiment-local, as 010:231 states. (1) Demo files: r = 900 + d in 007 and 008 (identical, as their exact T_G cross-check needs); r = 60 + d in 009 and 010, on purpose, because 010's assertion that the manifest has fewer than 100 entries (which keeps the V2(c) offsets +100 + r' from overflowing) depends on it; 011 uses a combined internal index with no per-recording seeds (011:257); 012 Part B uses evidence recordings only. (2) Corpus-level seed meanings are defined only by each notebook's own table: for example +703 is 007's observer-cluster bootstrap, 008's split-half agreement bootstrap and unused in 010; the recording-level bootstrap seed is +702 in 007, 008 and 010, +909 in 009, +1104 in 011 and +712 in 012. 010:269's \"(the same convention as Experiment 007)\" refers to +702 only. (3) No seed value changes. Under Amendment C01, streams are shared between experiments only where a notebook says so: the 007/008 matched Gaussian (+1) and column permutation (+2), both with subStream 0.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "none; add the clarification next to 007:104 and 007:252.",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "none; add the clarification next to 008:106 and 008:287.",
+     "extra": ""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "none; add the clarification next to 009:112 and 009:231.",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "none; add the clarification next to 010:83, 010:231 and 010:269.",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "none; add the clarification next to 011:73 and 011:257.",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "none; add the clarification next to 012:399 and 012:403.",
+     "extra": ""
+    }
+   ],
+   "strictness": "Documentation only; no seed, offset or rule changes."
+  },
+  {
+   "id": "C09",
+   "title": "Missing control and fixture seeds (007 synthetic signals, R7 fixture, surrogate controls; 012 H-B2)",
+   "notebooks": [
+    "007",
+    "012"
+   ],
+   "finding_ids": [
+    "SEED-4",
+    "MISSED-regime-1"
+   ],
+   "owner_decision": "none",
+   "why": "SEED-4 and a missed regime item: 007 gave no seeds for the controls and stochastic reducers on its synthetic signals, for the R7 fixture's matched control or for S's own controls in H3, and 012 gave none for the controls of its noise and surrogate inputs, so seeds would have been chosen after pre-registration.",
+   "change_text": "Amendment C09. (007) (1) The 5 synthetic signals are pseudo-recordings r = 800 + i for i = 0 to 4 (signal seeds 20260720 + 801 to 805 in that order). The per-recording offset table of Method applies to them unchanged (+1 G, +2 P, +3 UMAP-15, +4 UMAP-5, +5 t-SNE random initialisation, +6 random projection). (2) R7 fixture: built from Philox key (20260720 + 900, 0) (Amendment C01): 3 clusters of 100 points each in 50 dimensions, points in cluster order; cluster centre k (k = 0, 1, 2) = (10/sqrt(2)) * e_k on coordinate axis k, so every pair of centres is 10 apart; each point = its centre + i.i.d. N(0,1) noise in all 50 coordinates, drawn row-major. Its matched-Gaussian control is pseudo-recording r = 850, offset +1 (seed 20260720 + 850001), shape 300 x 50. (3) H3: the surrogate S's own matched Gaussian and column permutation use the recording's +1 and +2 seeds with subStream 1. (4) Collision check: evidence seeds <= 20260720 + 59036; synthetic 20260720 + 800001 to 804036; R7 control 20260720 + 850001; demo from 20260720 + 900001; corpus-level seeds < 20260720 + 1000. All of these seeds and keys enter the seed-uniqueness test. (012) (5) H-B2: for each arm, the matched Gaussian and column permutation of S_w, of the white noise and of the pink noise use the arm's G_w and P_w seeds (+21 to +24, +31 to +34) with subStream 1 (S_w), 2 (white) and 3 (pink); X_w keeps subStream 0. No new seed values are introduced in 012, so 012:401's collision argument is unchanged.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:176 \"(n = 300, 50 dims, centres 10 SD apart, seed 20260720 + 900)\" (construction now fully stated); 007:178 \"a matched-Gaussian control built from the fixture\" (seed now given); 007:234-236 synthetic controls without seeds; 007:252 \"demo seeds start at 20260720 + 900000\" (extended collision list).",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:117-119 H-B2 (no seeds for the controls of noise and surrogate inputs); 012:395-396 table rows for G_w and P_w (subStreams added).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Fills a gap with fixed, pre-stated seeds and constructions before any run; no threshold or rule changes."
+  },
+  {
+   "id": "C10",
+   "title": "Gap-excluded trustworthiness: candidate set excludes the point; exact equality kept",
+   "notebooks": [
+    "007",
+    "008",
+    "012"
+   ],
+   "finding_ids": [
+    "XREF-23",
+    "CODE-14",
+    "SD-18",
+    "MISSED-cross-5"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-23, CODE-14, SD-18 and a missed item: 007's candidate set did not exclude i itself, so the pre-registered \"gap 0 equals T\" test could not pass, and 008's \"T_span = T exactly\" could fail on floating-point order alone.",
+   "change_text": "Amendment C10. (1) The candidate set excludes the point itself: E_i = { j != i : |t_i - t_j| >= gap } for T_gap, and E_i = { j != i : |startFrame_i - startFrame_j| >= 7 } for 008's T_span. With gap 0, m_i = n - 1 and the formula equals the standard T. (2) One shared implementation, metrics.gapExcludedTrustworthiness in tools/lib/metrics.js, is used by 007, 008 and 012. It accepts the gap either in seconds on emissionTime or as an integer start-frame predicate, and its tests cover both. (3) Exactness is kept, not loosened. When no pair is excluded (gap 0, or T_span at h >= 7), the function computes T with the same arithmetic in the same summation order as metrics.trustworthiness, so the pre-registered \"equals T exactly\" assertions hold bit for bit, and the \"<= 1e-12\" tests hold as well.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:196 \"Eᵢ = { j : |tᵢ − tⱼ| ≥ 1.5 s }\".",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:204 \"Eᵢ = { j : windows i and j share no audio sample }\" (j ≠ i made explicit); 008:209 \"If 007's implementation exists at run time, 008 uses it.\" (one shared function, Amendment C11).",
+     "extra": "008:206 and 008:540 exact-equality assertions stay as written."
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:351 \"defined exactly as in Experiment 007\" (now as amended by C10).",
+     "extra": ""
+    }
+   ],
+   "strictness": "A definitional correction that makes the pre-registered tests passable without loosening any equality or threshold."
+  },
+  {
+   "id": "C11",
+   "title": "Runners use only shared, tested code",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "XREF-18",
+    "APPR-09",
+    "CODE-8",
+    "SD-18",
+    "MISSED-approvals-6"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-18, APPR-09, CODE-8, SD-18 and a missed item: 008 and 012 allowed runner-private fallbacks for code that must match across experiments, and the hand-off's \"use only tools/lib/*\" sat in tension with the notebooks' use of exported exporter functions.",
+   "change_text": "Amendment C11. (1) Every metric, statistic, surrogate, FFT, bootstrap, eigen-solver wrapper and random-number routine a runner uses lives in tools/lib, or is an exported production function of tools/export_single_recording_dataset.js, and has the unit tests this notebook lists. No runner-private implementation is allowed. \"Use only tools/lib/*\" means no re-implementation; using the exporter's exported production functions is allowed and required. (2) Runner-private fallbacks are withdrawn (see Supersedes). (3) The exact eigen-solver is ml-matrix 6.14.0, a transitive dependency pinned by package-lock.json, used through a tested tools/lib wrapper; the runner asserts its presence and version at start-up.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "none; 007:67 and 007:279 are consistent. Add the rule.",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:209 \"If 007's implementation exists at run time, 008 uses it.\"; 008:240 \"it is implemented in the runner (or added to `metrics.js`) with its own unit test\"; 008:526 \"(or implemented in the runner)\".",
+     "extra": ""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "none; add the rule (009:262 ml-matrix check consistent).",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "none; add the rule (010:540 already requires tools/lib/axis_meaning.js).",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "none; add the rule (011:463 ml-matrix check consistent).",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:383 \"shared with Experiment 007 if that implementation exists at run time\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "Removes permissions for private code and adds a version check; nothing is loosened."
+  },
+  {
+   "id": "C12",
+   "title": "A skipped unit test counts as not passed",
+   "notebooks": [
+    "007",
+    "008",
+    "009",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "CODE-10"
+   ],
+   "owner_decision": "none",
+   "why": "CODE-10: some tests skip silently when the smoke file is missing, and 007:180 said what a failure means but not what a skip means.",
+   "change_text": "Amendment C12. A unit test that is skipped counts as not passed, with the same consequence as a failure. The only exception is a test that is skipped because it is explicitly gated to performance measurement by an environment variable (the performance test in tools/test/metrics.test.js). The runner records the status of every test by its actual name (pass, fail or skip) in the results JSON.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:180 \"A failure in any t-SNE test makes the t-SNE arm invalid. A failure in any PCA test stops the run.\" (a skip now counts as a failure).",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:530 \"Unit tests ... that must pass before the run\" (skips now count as not passed).",
+     "extra": ""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "009:481 \"All must pass before the run.\" (skips now count as not passed).",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:553 \"Unit tests ... that must pass before the run\" (skips now count as not passed).",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:470 \"Tests that must pass before the run\" (skips now count as not passed; 011:206 A1 already requires 0 skipped).",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:593 \"Unit tests ... that must pass before the run\" (skips now count as not passed).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Only makes the test requirement stricter."
+  },
+  {
+   "id": "C13",
+   "title": "One standardisation and one distance definition",
+   "notebooks": [
+    "007",
+    "008",
+    "012"
+   ],
+   "finding_ids": [
+    "SD-8",
+    "XREF-24",
+    "MISSED-regime-4"
+   ],
+   "owner_decision": "none",
+   "why": "SD-8, XREF-24 and a missed item: 007, 008 and 012 describe the metric spaces with different functions and distances, and 012's text implies z-scoring twice, which is not bitwise idempotent and threatens its <= 1e-12 cross-check.",
+   "change_text": "Amendment C13. (1) Runners pass the unstandardised feature matrix (X, or X_w in 012) to every reducer (pca, reduceFeatures, reduceUmap, reduceTsne, reduceRandomProjection) and to metrics.trustworthiness, metrics.continuity and metrics.makeRankContext; each z-scores once internally (population SD; a zero-SD column is divided by 1). No runner pre-standardises. (2) Original space: the z-scored matrix, squared Euclidean distance. Embedded space: squared Euclidean distance on the embedding as given, as the code computes it. Ties go to the lower row index. (3) A unit test asserts that metrics.standardize, reducers.standardize and reducers.standardizeFlat give bitwise-identical output on a fixed fixture. 007's start-up assertion (<= 1e-12, 007:114) stays.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:114 \"The metrics' original space is `standardizeFlat(X)`\" (the metric z-scores internally with metrics.standardize, shown identical by the test); 007:189 \"Embedded space: Euclidean distance.\"",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "none; 008:115 and 008:196 are consistent. Add the unit test.",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:336 \"Build X_w (n × D_w), z-scored per column with `tools/lib/reducers.js` `standardize`, as in Experiment 007.\"; 012:349 \"Embedded space: Euclidean distance.\"",
+     "extra": ""
+    }
+   ],
+   "strictness": "Clarifies definitions to match the code and adds a test; no threshold or cross-check tolerance changes."
+  },
+  {
+   "id": "C14",
+   "title": "Cross-checks do not depend on run order",
+   "notebooks": [
+    "007",
+    "008",
+    "012"
+   ],
+   "finding_ids": [
+    "XREF-5",
+    "MISSED-ids-2"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-5 and a missed item: 008 and 012 run their 007 cross-checks only if 007's JSON already exists, and 007 checks nothing the other way, so running 008 or 012 first would silently skip the checks.",
+   "change_text": "Amendment C14. (1) The 007/008 consistency check (008:306) and the 007 / 012 Part B W15 cross-check (012:333) are run by whichever experiment finishes second, and also by a separate consistency-check script in tools/experiments that runs as soon as both results JSON files exist; that script is frozen with the later experiment. (2) At the end of its run, 007 performs the same checks against 008's and 012's results JSON if they exist. (3) No verdict, label or number of 007, 008 or 012 Part B reaches the viewer, an export, the Decision Log or an Experiment 011 evidence block before the check between the two has been run and recorded as passed. A 007/008 mismatch suspends as 008:307 states. A 012 Part B mismatch is flagged and escalated as 012:333 states, and 012 Part B numbers are not quoted until it is resolved. (4) 008's joint label (Amendment C03) is computed only when 007's results JSON exists. (5) 012 Part A and Part B may be run as separate invocations of the same runner, each writing its own block (partA, partB) with its own run metadata into the one results JSON. Part A does not depend on 007.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "none; 007 had no check against 008 or 012. Add the check.",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:306 \"if Experiment 007's results JSON exists when 008 runs\".",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:333 \"if `05_Benchmark_Results/v2/experiment_007_reducer_rebenchmark_production_regime.json` exists at run time\"; 012:546 and 012:575 (one JSON, one runner; separate invocations per part now allowed).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Only adds checks and holds results back until they pass; no tolerance changes."
+  },
+  {
+   "id": "C15",
+   "title": "Edge parity uses the exporter's own arithmetic",
+   "notebooks": [
+    "007",
+    "009"
+   ],
+   "finding_ids": [
+    "CODE-18",
+    "MISSED-code-2"
+   ],
+   "owner_decision": "none",
+   "why": "CODE-18 and a missed item: 007 requires exact equality with the exported edges but did not say to use the exporter's scaled positions and square-root distances, and 009 allowed a 0.5% difference where exact equality is reachable.",
+   "change_text": "Amendment C15. (1) Every E3 / PCA-3D edge set a runner builds, for real data and for every control, is built with the exporter's arithmetic: point objects with POSITION_SPREAD-scaled positions, square-root Euclidean distance and a stable sort, through a tools/lib edge builder unit-tested to reproduce the exported buildSimilarityEdges exactly at (k = 3, gap 1.5 s). (2) 007: the exact-equality assertions of 007:205 and 007:278 stay as written. (3) 009: at the default (3, 1.5 s) the runner's E3 edges must equal the exporter's similarityEdges exactly. The pass-with-note branch is withdrawn; the near-tie trace is kept as a diagnostic only. The generalised builder (009:145) must reproduce buildSimilarityEdges exactly at (3, 1.5 s) on E3.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:203 \"nearest in the PCA-3D positions among Eᵢ, stable sort by distance\" (arithmetic now fixed as the exporter's).",
+     "extra": ""
+    },
+    {
+     "notebook": "009",
+     "supersedes": "009:253 \"**Pass-with-note** is allowed only if ≤ 0.5% of edges differ **and** every differing edge is traced to a near-tie\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "Replaces a tolerance with exact equality and fixes the arithmetic; stricter only."
+  },
+  {
+   "id": "C16",
+   "title": "The lambda-4 probe's convergence is not reported",
+   "notebooks": [
+    "007",
+    "008"
+   ],
+   "finding_ids": [
+    "CODE-15"
+   ],
+   "owner_decision": "none",
+   "why": "CODE-15: pca() keeps only the eigenvalue of the lambda-4 probe, so 007:283's request to log its converged flag cannot be met and lambda-4 ratios have unknown accuracy.",
+   "change_text": "Amendment C16. tools/lib/reducers.js pca() returns only the eigenvalue of the lambda-4 probe, not its iterations, residual or converged flag. Unless pca() and app/src/analysis/pca.ts are extended in lockstep to return these (keeping the bit-identical Node/browser parity test green), every lambda-4-based quantity (007: the nextEigenvalueRatio of component 3; 008: lambda-4 / lambda-3 in the eigen-gap stratification) is marked \"approximate (probe convergence not reported)\", and 007's request to log the probe's converged flag is recorded as \"not available\". Neither quantity enters any gate.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:283 \"the `converged` flags and `nextEigenvalueRatio` of production components 1–3 (and of the λ₄ probe)\".",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "008:179 \"λ₄/λ₃ (from `pca()` `nextEigenvalueRatio`)\" (now marked approximate).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Adds a reporting caveat; no gate or threshold changes."
+  },
+  {
+   "id": "C17",
+   "title": "Exposure disclosure: the 010 front-end pre-count",
+   "notebooks": [
+    "007",
+    "008"
+   ],
+   "finding_ids": [
+    "SD-16",
+    "MISSED-ids-5"
+   ],
+   "owner_decision": "none",
+   "why": "SD-16 and a missed item: 007 said it was unknown whether evidence recordings went through the production front end, but 010 records that a front-end-only pass was run on every manifest file.",
+   "change_text": "Amendment C17. Disclosure: 010:355-366 records that on 2026-09-29 a scratch script decoded every manifest entry with readFullAudio and ran only computeContinuousFrontEnd (STFT, points, amplitude filter), computing n, minShift and D. No PCA, descriptor, correlation, trustworthiness or other metric was computed on corpus data. Development exposure on the smoke/demo file is disclosed at 007:97-101 and 008:37. The owner's statement at 007's freeze (007:485) must cover this pre-count.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:103 \"Whether any evidence recording was run through the PR pipeline before the freeze is not known to this document.\"",
+     "extra": ""
+    },
+    {
+     "notebook": "008",
+     "supersedes": "none; add the disclosure next to 008:37 and 008:103.",
+     "extra": ""
+    }
+   ],
+   "strictness": "Adds disclosure only."
+  },
+  {
+   "id": "C18",
+   "title": "Checkpointing that cannot mix code versions",
+   "notebooks": [
+    "009",
+    "010"
+   ],
+   "finding_ids": [
+    "APR-2",
+    "APPR-17",
+    "SD-19",
+    "XREF-28"
+   ],
+   "owner_decision": "none",
+   "why": "APR-2, APPR-17, SD-19, XREF-28: the owner asked for worker threads, checkpoints and logged times (HANDOFF 2026-09-29); 010 had no checkpointing, and neither 009 nor 010 prevented a resume from mixing code versions.",
+   "change_text": "Amendment C18. Recorded owner instruction (2026-09-29): \"Use worker threads across cores, checkpoint, and log the actual times.\" (1) The runner checkpoints after every completed unit (010: per unit; 009: per recording and arm, and per calibration replicate) and can resume from the checkpoints. It logs actual wall time per unit and per arm and the worker count. (2) Every checkpoint records the freeze-sidecar hashes, the freeze commit and (010) the governing-arm file blob. A resume refuses if any of these differs from the current values; units computed under different code or config versions are never combined. (3) A unit test asserts that a run interrupted and resumed gives the same unit-result SHA-256 as an uninterrupted run (010: extending the worker-count invariance test, 010:563). Seeds and results do not change.",
+   "per_notebook_edits": [
+    {
+     "notebook": "009",
+     "supersedes": "none; 009:293 and 009:482 checkpointing kept and extended.",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:396 \"The runner may distribute units over worker processes.\" (checkpointing was missing).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Only adds checks; nothing that is run or decided changes."
+  },
+  {
+   "id": "C19",
+   "title": "Exported offset and span fields (shared prerequisite for 011 and 012 Part A)",
+   "notebooks": [
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "XREF-6",
+    "XREF-17",
+    "CODE-7",
+    "MISSED-code-1"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-6, XREF-17, CODE-7 and a missed item: 012 Part A and 011 need exporter fields that do not exist yet, a seconds-only export needs a stated rounding rule to recover exact sample offsets, and the browser port's per-component variance ratios are not parity-checked.",
+   "change_text": "Amendment C19. (1) The per-point audio offsets and the span are computed in one shared tools/lib module that tools/export_single_recording_dataset.js calls; app/src/analysis/pipeline.ts changes in lockstep, and tools/verify_browser_port_parity.mjs is extended to the new fields and must still print PARITY OK. (2) Fields: top-level framesPerPoint, stftHopSize and samplingWindowSpanSeconds = ((framesPerPoint - 1) * stftHopSize + fftSize) / sampleRate, next to the existing analysisSampleRateHz and fftSize; and per point either the integer start frame or audioStartSeconds and audioEndSeconds. Field names are the exporter owner's choice (012:229). (3) Convention, stated in the export documentation: point audio = [a_p, b_p) on the analysis timeline, with a_p = stftHopSize * startFrame_p and b_p = a_p + (framesPerPoint - 1) * stftHopSize + fftSize samples. If seconds are exported, round(audioStartSeconds * analysisSampleRateHz) and round(audioEndSeconds * analysisSampleRateHz) must give a_p and b_p exactly, and 012's A5 checks this exact equality on every point. (4) 012 Part A is not started before the exporter emits these fields: without them it can only reach outcome R2 (012:469), after which all of Part A must be re-run. (5) pcaExplainedVarianceRatio is added to the Node exporter (the browser port already emits it) and the parity check covers each component, not only pcaExplainedVarianceTotal.",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "none; 011:88-92 Step 0 fields are consistent. Add the shared-module and parity requirement.",
+     "extra": "011's Step 0 fields framesPerPoint, stftHopSize and samplingWindowSpanSeconds are the same fields 012 A5 uses."
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:229 A5 \"together with a stated convention\" (convention and exact-recovery rule now fixed).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Fixes a convention and a prerequisite and adds a parity check; no tolerance or pass condition changes."
+  },
+  {
+   "id": "C20",
+   "title": "Visitor-facing strings only as audited text",
+   "notebooks": [
+    "008",
+    "010",
+    "011",
+    "012"
+   ],
+   "finding_ids": [
+    "XREF-12",
+    "MISSED-cross-4"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-12 and a missed item: 008's view labels, 010's axis captions and 012's user caveats are visitor text outside 011's closed set, and 010 left their translation to the viewer, against the recorded consequence that nothing is shown before human review.",
+   "change_text": "Amendment C20. (1) Every visitor-facing string pre-committed by 008 (the rule 1 labels, the rule 5 tooltip), by 010 (the caption templates, the not-validated text, the None text and the labels-disabled statement) and by 012 (the codec-smearing caveat, 012:238) is shown to visitors only as audited text: it is added as a template to 011's closed set by a dated 011 amendment before the 011 run that audits it, and it passes A1 to A6 with the human checks of Amendment C04 in the language shown. Until then it is not shown to visitors. (2) Nothing is translated by the viewer; ES and PT versions exist only as audited templates. (3) 012's development-build caveat (012:481, as amended by C05) is shown only in development or internal preview builds, as 012:481 allows, and never to visitors in production.",
+   "per_notebook_edits": [
+    {
+     "notebook": "008",
+     "supersedes": "none; 008:346 \"(exact text, passed to Experiment 011)\" and 008:410 are consistent. Add the display condition.",
+     "extra": ""
+    },
+    {
+     "notebook": "010",
+     "supersedes": "010:465 \"(pre-committed wording, EN; localisation belongs to the viewer)\"; 010:447 labels-disabled statement and 010:455 not-validated statement (display now needs the 011 audit).",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:40 \"Anything not in S1–S8 is out.\" (still closed; these strings enter only by later dated amendments before the run that audits them).",
+     "extra": ""
+    },
+    {
+     "notebook": "012",
+     "supersedes": "012:238 \"a documented caveat in the export documentation and in the compare view's information text\" (visitor display needs the 011 audit).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Only withholds text until it is audited; no pre-committed wording or gate is widened."
+  },
+  {
+   "id": "C21",
+   "title": "axisMeaning export schema and the S6 gate",
+   "notebooks": [
+    "010",
+    "011"
+   ],
+   "finding_ids": [
+    "XREF-9"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-9: 011's S6 gates on axisMeaning[a].status = \"labelled\", which 010 never defines, and 010 gives no export schema, so it is unclear whether a mix or a withheld axis counts.",
+   "change_text": "Amendment C21. (1) 010 exports, per axis a: outcome (one of \"single\", \"mix\", \"none\"); families ([F1] or [F1, F2]); direction sign(s), relative to the exported position[axisMapping[a]]; rho1 and pHolm1 (and rho2, pHolm2 for a mix); n; explainedVarianceShare; shipped (true or false); withheldReason, one of a fixed list: \"labels disabled (method gate)\", \"inconclusive (denominator)\", \"family not shippable\", \"not validated for labelling\", \"split-half check not evaluable\", \"split-half disagreement\", \"inconsistent within family\", \"Experiment 007 gate not met\", \"caption wording not approved\"; and the 6 x 24 loadings matrix with the 24-band profile. (2) shipped = true only if every 010 gate for that axis and export passes and the caption wording is approved (Amendment C22): a single label on a shippable family, or a mix whose two families are both shippable (010:456). (3) 011's G6.2 is met only if axisMeaning[a].shipped = true. One sentence per shipped axis, none for any other axis.",
+   "per_notebook_edits": [
+    {
+     "notebook": "010",
+     "supersedes": "010:535 \"they receive either the gated `axisMeaning` block or the \\\"no reliable label\\\" state\" (schema now fixed).",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:108 \"`axisMeaning`: the per-axis block defined by Experiment 010.\"; 011:191 G6.2 \"`axisMeaning[a].status` = `\\\"labelled\\\"` under Experiment 010's rule\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "Defines an undefined gate by the stricter reading (a label ships only when every gate passes); nothing is widened."
+  },
+  {
+   "id": "C22",
+   "title": "Axis caption wording: unshipped until owner-approved; proposed plain-language drafts",
+   "notebooks": [
+    "010",
+    "011"
+   ],
+   "finding_ids": [
+    "XREF-10",
+    "SD-6",
+    "XREF-11",
+    "MISSED-cross-1",
+    "MISSED-cross-6"
+   ],
+   "owner_decision": "strict default pending owner",
+   "why": "XREF-10, SD-6, XREF-11 and two missed items: 010's pre-committed caption words (bird's, animals, intent, tonal, higher-sounding, Spectral, centroid, RMS), its 39-word sentence and its incomplete templates cannot pass 011's audit, and \"of the variation shown\" misstates what the share is a share of.",
+   "change_text": "Amendment C22 (strict default, pending owner decision). (1) Rule in force: until the owner approves concrete reworded captions by a dated amendment, and those captions pass 011 (A1 to A6 with the human checks of Amendment C04), S6 and every axis caption stay unshipped. The viewer shows only the numbers and the loadings picture (010:445-446). (2) The caption words come from an owner-approved caption table stored in tools/lib/axis_meaning.js and frozen with 010, not from the DESCRIPTOR_FAMILIES higher / lower / plain strings, which are not visitor text. (3) The variance clause says \"of the total variation between moments\", with the share computed and rounded by 011's ev rule, never \"of the variation shown\". (4) Additions to 011's A3 denylist, for every template, whole-word, never waived: EN \"tonal*\", \"tone*\", \"aggressi*\", \"because\", \"due to\"; ES \"agresi*\", \"porque\", \"debido a\"; PT \"agressi*\", \"porque\", \"devido a\". The ES/PT entries are drafts to be confirmed by the fluent A5 reviewer; they may be extended, never reduced. (5) PROPOSED, awaiting owner approval (EN drafts only; ES/PT are written later and checked by fluent humans): Single label: \"Toward the + end of this direction, moments have {higherWords}.\" / \"Toward the − end, they have {lowerWords}.\" / \"The strongest measure is {descriptorPlain}; its rank agreement with this direction is {rho}, over {n} moments.\" / \"The same result appeared again when the recording was split into alternating parts.\" / \"This direction alone keeps {ev} of the total variation between moments, measured across all frequencies.\" Suffix on every label: \"This describes all sound in the file as recorded, including background noise, other sources, distance and the recording equipment.\" / \"It says nothing about behaviour or purpose.\" Mix: \"This direction reflects {F1plain} and {F2plain} together.\" / \"Neither matches it clearly better than the other.\" / \"Their rank agreements with this direction are {rho1} and {rho2}.\" then, for each family, \"Toward the + end, moments have {words}.\" and \"Toward the − end, moments have {words}.\", then the variance sentence and the suffix. Not validated: \"The strongest measured link is with {descriptorPlain}, at rank agreement {rho}.\" / \"This measure has not been checked for labelling, so no plain label is given.\" None: \"No single sound property explains this direction.\" (010:469, unchanged). Labels disabled: 010:447's statement, unchanged. Direction words (higherWords / lowerWords): brightness \"sound strength higher in frequency\" / \"sound strength lower in frequency\"; noisiness \"a more hiss-like sound, with strength spread more evenly across frequencies\" / \"a purer sound, with strength less evenly spread across frequencies\"; loudness \"a louder measured level\" / \"a quieter measured level\"; width \"sound strength covering a wider range of frequencies\" / \"sound strength covering a narrower range of frequencies\". Family phrases for a mix: brightness \"where the sound's strength sits in frequency\"; noisiness \"how hiss-like or pure the sound is\"; loudness \"the measured loudness level\"; width \"how wide a range of frequencies the sound covers\". Descriptor phrases: centroidHz \"the average frequency of the sound's strength\"; rolloffHz \"the upper edge of the sound's strength across frequencies\"; flatness \"how evenly the sound's strength spreads across frequencies\"; entropy \"how scattered the sound's strength is across frequencies\"; rms \"the measured loudness level\"; bandwidthHz \"how wide a range of frequencies the sound's strength covers\"; pitchHz \"the estimated base frequency\"; crest \"how much the strongest frequency stands out\"; slope \"whether the sound's strength leans toward low or high frequencies\"; flux \"how much the sound's strength rises from instant to instant\"; freqMod \"how fast the average frequency of the sound's strength moves\"; ampMod \"how fast the measured loudness level changes\". Rendering in the drafts: rho to 2 decimals with sign, n as an integer, ev as an integer percent by 011's rule. Each draft sentence has at most 25 words and at most 3 numbers, and uses no word on 011's A3 or A4 lists as amended here.",
+   "per_notebook_edits": [
+    {
+     "notebook": "010",
+     "supersedes": "010:422 \"worded with that family's `higher` / `lower` strings in `DESCRIPTOR_FAMILIES`\"; 010:467 single-label template (one sentence of about 39 words, \"(strongest measure: <descriptor>, Spearman ρ = <ρ₁>, ...)\" and \"This direction accounts for <EV>% of the variation shown.\"); 010:468 mix template ending \"…\" (incomplete); 010:455 \"Strongest measured association: <descriptor> (ρ = …).\" (incomplete); 010:470 mandatory suffix \"including background noise, other animals, ... It does not say anything about the bird's behaviour or intent.\"",
+     "extra": "The drafts are labelled \"PROPOSED, awaiting owner approval\" in the notebook. The 010:471 forbidden-words scan applies to the drafts and to the approved captions."
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:214 EN denylist (adds \"tonal*\", \"tone*\", \"aggressi*\", \"because\", \"due to\"); 011:215 and 011:216 ES/PT denylists (additions as listed); 011:191 S6 \"Written from Experiment 010's decided vocabulary.\" (S6 now also needs owner-approved captions).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Strict default pending owner decision: captions stay unshipped, the denylist grows, and the drafts are proposals only; no gate or threshold is loosened."
+  },
+  {
+   "id": "C23",
+   "title": "S7, the similarity-line sentence",
+   "notebooks": [
+    "011"
+   ],
+   "finding_ids": [
+    "APPR-05",
+    "SD-4",
+    "CODE-4",
+    "WORD-1",
+    "XREF-13",
+    "MISSED-approvals-3",
+    "MISSED-regime-3"
+   ],
+   "owner_decision": "strict default pending owner",
+   "why": "APPR-05, SD-4, CODE-4, WORD-1, XREF-13 and two missed items: S7's fallback \"closest in this 3D picture\" is false if 009 moves the edges out of 3D, differs from 007's string, has no fact for the edge space, no runtime gate for 1D/2D views, and the denylist could not catch perceptual phrases.",
+   "change_text": "Amendment C23 (strict default, pending owner decision). (1) Exported edges in E3 (the payload's similaritySpace = \"E3\"): the default wording is Experiment 007's exact string \"closest in this 3D projection\" (007:383). It may be upgraded at most to \"similar spectrogram content (in the analysed feature space)\", and only if Experiment 009 decides this for E3 and Experiment 007's EF gate passes against G, P and S (007:384). (2) Exported edges in any other space: S7 is omitted, unless a later owner-approved dated amendment fixes the wording for that space; 007's gate does not apply to such edges. (3) S7 describes the edges actually exported, never 009's winner W while the exporter change is withheld or provisional. The fact similaritySpace (from the payload) is added to S7 and to the reviewer bundle projection. (4) Perceptual wording is never allowed. Added to the A3 denylist as whole phrases: EN \"sound alike\", \"sounds alike\", \"sound similar\", \"sounds similar\", \"sound like\", \"sounds like\"; ES \"suena igual\", \"suenan igual\", \"suena parecido\", \"suenan parecido\", \"suena similar\", \"suenan similar\", \"suena como\", \"suenan como\"; PT \"soa igual\", \"soam iguais\", \"soa parecido\", \"soam parecido\", \"soa semelhante\", \"soam semelhantes\", \"soa como\", \"soam como\". The ES/PT entries are drafts to be confirmed by the fluent A5 reviewer; they may be extended, never reduced. (5) New runtime gate G7.4: S7 is shown only while the 3D view (all three axes) is displayed, because the edges are 3D neighbours (008:496).",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "011:192 \"otherwise \\\"closest in this 3D picture\\\"\" and S7's facts \"`nEdges` ... `gapS`\" (similaritySpace added); 011:151 reviewer bundle projection (adds similaritySpace); 011:200 runtime gate list (adds G7.4); 011:214-216 denylists (perceptual phrases added).",
+     "extra": "011:211 A6 trap (5) stays and now matches (1)-(3)."
+    }
+   ],
+   "strictness": "Strict default pending owner decision: the sentence can only become narrower or be omitted, and the denylist grows."
+  },
+  {
+   "id": "C24",
+   "title": "Evidence statuses that fail closed",
+   "notebooks": [
+    "011"
+   ],
+   "finding_ids": [
+    "XREF-14"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-14: 011's evidence status allows only pending, decided or not-run, so an 008 suspension, a 009 provisional verdict or a 007 escalation would have to be encoded as decided and would open S2b or S7.",
+   "change_text": "Amendment C24. The evidence status (011:104) may also be \"suspended\" (a 007/008 mismatch, or a failed consistency check of Amendment C14), \"provisional\" (for example 009's E95 provisional verdict, or an exporter change awaiting owner review), \"owner-decision-pending\" (a 007 row escalated to the owner, 007:371-376) or \"exploratory\" (output marked exploratory under Amendment C02). Every one of these fails closed, like \"pending\". The evidence block also records whether the consistency check of Amendment C14 has passed; until it has, the gates that read 007, 008 or 012 Part B fail closed.",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "011:104 \"`status`, one of `pending`, `decided` or `not-run`\"; 011:199 \"an evidence status of `pending` or `not-run`, or a missing evidence block, counts as a failed gate\" (extended).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Adds fail-closed states only."
+  },
+  {
+   "id": "C25",
+   "title": "S2a shown only with the view's trust numbers; one percent definition",
+   "notebooks": [
+    "008",
+    "011"
+   ],
+   "finding_ids": [
+    "SD-5",
+    "XREF-8",
+    "XREF-25",
+    "MISSED-regime-2"
+   ],
+   "owner_decision": "none",
+   "why": "SD-5, XREF-8, XREF-25 and a missed item: 008 rule 5 requires the kept-variation percent, T and the control reference with the margin to be shown together, but 011 shows S2a alone, has no template for T, and computes the percent differently from 008.",
+   "change_text": "Amendment C25. (1) 011 adds template S2c to its closed set. Facts: T <- viewPreservation[view A].trustworthinessK5; T_G <- controlTrustworthinessK5; margin <- marginK5 (signed); each to 2 decimals by 011's rounding rule. Gates: G2c.1 evidence.exp008.status = decided (Amendment C24 statuses fail closed); G2c.2 the viewPreservation block of this recording is present, not \"deferred\", and view A's three values are finite; G2c.3 runtime toggle = A. A second sentence of S2c states, without numbers, that moments sharing audio with each other count as close (008:403). No draft wording is given; the final wording is fixed and hashed before the run that audits it, and it may not use \"neighbour*\" or \"trustworthiness\" (011:222). (2) New gate G2a.4: S2a is shown only while S2c for the same view is shown; otherwise S2a is omitted and listed with G2a.4 in omitted[]. (3) One percent definition: the \"keeps X%\" number that 008's viewer shows is 011's ev[A], computed and rounded by 011's canonical rule (011:164, and the \"under 1%\" variant only when ev > 0), and every other number 008 rule 5 shows uses 011's rounding and formatting rule (011:156-170). (4) The row-count bounds at 011:240 are superseded by the same formula with the S2c variants added and S2a gated on S2c; the runner logs the formula's inputs and outputs.",
+   "per_notebook_edits": [
+    {
+     "notebook": "008",
+     "supersedes": "008:397 \"X = EV_V × 100, rounded to the nearest integer, shown as \\\"<1%\\\" if EV_V < 0.005\"; 008:398-399 \"2 decimals\" (now by 011's rounding rule).",
+     "extra": ""
+    },
+    {
+     "notebook": "011",
+     "supersedes": "011:186 S2a gates G2a.1-G2a.3 (G2a.4 added); 011:40 closed set S1-S8 (S2c added by this dated pre-run amendment); 011:240 \"At the first run S2b, S6 and S7 are gated off, so e_i ≤ 12\" and the bounds derived from it.",
+     "extra": "Add viewPreservation to the reviewer bundle projection (011:151)."
+    }
+   ],
+   "strictness": "Adds a gate, a template that states only measured numbers, and one shared rounding rule; nothing is shown that was not shown before without its reference."
+  },
+  {
+   "id": "C26",
+   "title": "S2b facts, gate and payload source",
+   "notebooks": [
+    "011"
+   ],
+   "finding_ids": [
+    "XREF-7",
+    "SD-2",
+    "MISSED-cross-7"
+   ],
+   "owner_decision": "none",
+   "why": "XREF-7, SD-2 and a missed item: S2b's gate requires the per-recording flag, which 008 forbids exactly for the views that need S2b, reads verdicts from an undefined source, and has no fact for 008's noise condition.",
+   "change_text": "Amendment C26. (1) S2b facts: the view's joint outcome and its exact label text under Amendment C03, and the per-recording flag only where Amendment C03 (5) allows it. (2) Gates: G2b.1 the joint outcome for subset A exists in the export (the flag is not required); G2b.4 evidence.exp007.status = decided and evidence.exp008.status = decided; the statuses of Amendment C24 fail closed; G2b.2 and G2b.3 unchanged. (3) Source: for every input (corpus recording, demo file, fixture, decoy or upload) S2b reads the export's viewPreservation block (008:509), which carries the corpus-level joint outcome per view (with the SHA-256 of the 007 and 008 results files) and the per-recording flag computed at export time; the manifest SHA-256 mapping (011:107) is not used for S2b. viewPreservation is added to the reviewer bundle projection. (4) 008's noise condition (008:411): a fact noiseNotWeak (true if 008's synthetic white or pink noise was not flagged weak); when it is true, S2b may not imply that \"not weak\" means anything beyond \"better than a structureless random matrix of the same size\".",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "011:187 S2b row: facts \"The per-view flag from Experiment 008 for subset A, plus the per-view \\\"not better than random\\\" label from Experiment 007\" and G2b.1 \"the flag exists for this recording and subset A\"; 011:107 (for S2b only) \"The exporter maps verdicts to a recording by the audio file's SHA-256 from the manifest\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "S2b can only fail closed more often and can state no more than the joint verdict allows."
+  },
+  {
+   "id": "C27",
+   "title": "007 factual corrections and the scikit-learn check",
+   "notebooks": [
+    "007"
+   ],
+   "finding_ids": [
+    "FRZ-4",
+    "APPR-08",
+    "CODE-11",
+    "STALE-2",
+    "APPR-21",
+    "SD-12",
+    "CODE-12",
+    "INC-1",
+    "XREF-28",
+    "APPR-22",
+    "CODE-13",
+    "SD-13",
+    "SD-14",
+    "FRZ-2",
+    "MISSED-regime-6"
+   ],
+   "owner_decision": "none",
+   "why": "FRZ-4, APPR-08, CODE-11, STALE-2, APPR-21, SD-12, CODE-12, INC-1, APPR-22, CODE-13, SD-13, SD-14 and FRZ-2: 007 still had an unfilled table placeholder, a misquoted test name, stale code facts, a stale blob note, imprecise counts, and a scikit-learn check it required before the freeze but had not done.",
+   "change_text": "Amendment C27. (1) Feasibility table row \"560 × 3078 Gaussian | PCA560_TIME | PCA560_NOTE\": this auto-95 PCA was run on 2026-09-29 concurrently with the 560-point t-SNE timing (see the t-SNE 560 row); its time and diagnostics were not recorded; no value is claimed; the row is non-governing (d95 uses EVD). (2) The test at tools/test/reducers.test.js:505 is named \"tsne-js root cause: dim 20 run() returns 3 after one step from a ~1e9 gradient; dim 2/3 run in full\". (3) reduceTsne's degreesOfFreedom default is \"auto\" = max(dim - 1, 1) (tools/lib/reducers.js); the runner still passes \"auto\" explicitly. (4) The reducers.js header now says the defaults were \"Checked against scikit-learn's source (main branch, sklearn/manifold/_t_sne.py, fetched 2026-09-29 ...)\". (5) scikit-learn check for R4 to R6 (required by 007:173 before the freeze), done 2026-09-29 against scikit-learn 1.9.1 (the TSNE documentation page and sklearn/manifold/_t_sne.py at tag 1.9.1; Literature row sklearnTSNE): early_exaggeration 12; _EXPLORATION_MAX_ITER = 250; momentum 0.5, then 0.8; gains += 0.2 / *= 0.8, clipped at min_gain = 0.01; learning_rate \"auto\" = max(N / early_exaggeration / 4, 50); init \"pca\" divided by np.std(X_embedded[:, 0]) * 1e-4; degrees_of_freedom = max(n_components - 1, 1); update and gains re-created at each _gradient_descent call (the restart at iteration 250). These match R4 to R6. Properties of the project implementation that differ, logged as 007:173 requires (they do not invalidate runs): the exact method, where scikit-learn defaults to \"barnes_hut\"; no early stopping, where scikit-learn uses n_iter_without_progress = 300 and min_grad_norm = 1e-07; the default perplexity min(30, (n - 1)/3), where scikit-learn uses 30 (the runner passes 30); and, per the reducers.js header (not re-verified here), for degrees of freedom other than 1 the project uses the true analytic gradient, which differs from scikit-learn's exact method. R4's \"≥ 1.2\" was checked at 1.9.1 only. (6) \"at most ≈ 560 points remain\" holds when no RMS value ties at the threshold; with ties more windows are kept, and only n <= 700 is guaranteed (as 010:52 states). (7) The 10 observers who contribute more than one recording each contribute to more than one species (Corpus_v2.md, Known bias 5). (8) The reference blob 5d7e3596af48e27378b95214b1f8317d0c9a8090 is historical; tools/lib/reducers.js is now committed with blob 7269f539ebc8583a12252197599c9d2a2d6aef74 (HEAD on 2026-09-29). The run-time value counts, and under Amendment C02 it must equal the freeze sidecar.",
+   "per_notebook_edits": [
+    {
+     "notebook": "007",
+     "supersedes": "007:302 \"| PCA560_TIME | PCA560_NOTE |\"; 007:153 \"The test `\\\"tsne-js root cause: dim 20 stops after 3 steps from a ~1e9 gradient; dim 2/3 run in full\\\"`\"; 007:157 \"**`degreesOfFreedom` defaults to 1** in `reduceTsne`\"; 007:159 \"\\\"... as recalled, NOT re-checked\\\". That remains true here (R4).\"; 007:173 \"They are not yet cited there.\" (now cited); 007:174-175 \"verify as in R4\" (done); 007:62 \"so at most ≈ 560 points remain\"; 007:221 \"10 observers contribute more than one recording, sometimes across species\"; 007:456 \"had blob hash `5d7e3596af48e27378b95214b1f8317d0c9a8090` on 2026-09-29, uncommitted and still being edited\".",
+     "extra": "Keep the placeholder row text and add the marker after it; the row stays planning-only."
+    }
+   ],
+   "strictness": "Factual corrections and a completed pre-freeze check; no rule or threshold changes."
+  },
+  {
+   "id": "C28",
+   "title": "008 factual corrections",
+   "notebooks": [
+    "008"
+   ],
+   "finding_ids": [
+    "ID-2",
+    "STALE-3",
+    "APPR-24",
+    "SD-9",
+    "CODE-16",
+    "INC-2",
+    "XREF-20",
+    "SD-15",
+    "XREF-3"
+   ],
+   "owner_decision": "none",
+   "why": "ID-2, STALE-3, APPR-24, SD-9, CODE-16, INC-2, XREF-20, SD-15, XREF-3: 008 lists the wrong evidence for D-010, quotes 007 text that no longer exists, cites stale code lines, calls its CI tie rule the Experiment 001 tie band, and allows a bird-specific claim that 007 never permits.",
+   "change_text": "Amendment C28. (1) D-010's evidence is Experiments 001, 003 and 006 (Decision_Log.md); the regime disclosure still holds. (2) Experiment 007 v2 no longer says \"100 iterations per component\"; 007:125 describes the tolerance-based iteration (1e-10 or 5000), matching the code. This stated reason to expect a 007/008 mismatch no longer applies; the exact-match check and its suspension rule are unchanged. (3) metrics.randomMatchedMatrix is at tools/lib/metrics.js lines 529-532. (4) The views-comparison tie rule (\"CI lower bound below 0.02 is a tie\") is a CI-based rule, stricter than Experiment 001's point-estimate tie band; it keeps its rule and loses that name. (5) No claim of \"bird-specific\" or \"song\" structure is made under any outcome. Experiment 007's surrogate gate licenses at most 007:382's wording about the analysed signal. 007's surrogate S tests structure beyond a stationary signal with the same long-term spectrum; it does not test song-specificity (007:231).",
+   "per_notebook_edits": [
+    {
+     "notebook": "008",
+     "supersedes": "008:12 \"Experiments 001–004\" (for D-010); 008:63 \"Experiment 007's Method describes \\\"100 iterations per component\\\". That does not match the current code\"; 008:308 \"007's Method text says \\\"100 iterations per component\\\"\"; 008:154 and 008:313 \"`tools/lib/metrics.js`, lines 522–525\"; 008:357 \"(the Experiment 001 tie band)\"; 008:405 \"no claim of \\\"bird-specific\\\" or \\\"song\\\" structure, unless Experiment 007's surrogate gate allows it\"; 008:493 \"The surrogate analyses that address whether the structure is song-specific belong to Experiment 007\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "Factual corrections; the bird/song rule becomes stricter and no threshold changes."
+  },
+  {
+   "id": "C29",
+   "title": "009 status, closure records and factual corrections",
+   "notebooks": [
+    "009"
+   ],
+   "finding_ids": [
+    "APPR-12",
+    "STALE-1",
+    "SD-10",
+    "CODE-17",
+    "INC-3",
+    "XREF-20",
+    "SD-13",
+    "APPR-13"
+   ],
+   "owner_decision": "none",
+   "why": "APPR-12, STALE-1, SD-10, CODE-17, INC-3, XREF-20, SD-13: 009's header and claim-wording section still say A1 awaits sign-off and the wording items are open, the revision log has no sign-off entry, and one frame count is off by one.",
+   "change_text": "Amendment C29. (1) Amendment A1 was signed off by the owner on 2026-09-29 (\"Approve 009-A1\"; 009:379, 009:483). (2) Open items 1 and 2 were closed on 2026-09-29 under the owner's decision that no perceptual wording is ever allowed; the edits were made by the assistant on that instruction (009:484; 011:478). The closure of item 1 holds only while 007's frozen text keeps 007:385 unchanged; any later change is a 007 deviation that reopens it. (3) For the longest listed recording (inat_376675, decodedSamples22050 = 2297344 in the manifest), floor((2297344 - 1024)/512) + 1 = 4486 frames, not 4487; the hop (7 frames) and the gap floor (0.3251 s) are unchanged. (4) The title's quoted phrase is the legacy claim under test (009:35, 009:58), not permitted wording.",
+   "per_notebook_edits": [
+    {
+     "notebook": "009",
+     "supersedes": "009:3 \"including pre-run Amendment A1, which awaits owner sign-off\"; 009:62 \"(open items; must be closed before either experiment runs)\"; 009:63 \"Until then the conflict is treated as unresolved.\"; 009:64 \"Template S7 ... still reads\"; 009:157 \"That gives 4487 frames\".",
+     "extra": "Add to the revision log (009:495) a dated entry recording the A1 sign-off and the closure of items 1-2 (2026-09-29), in addition to the C02 revision entry."
+    }
+   ],
+   "strictness": "Status and factual corrections only; the wording rules stay as strict as recorded."
+  },
+  {
+   "id": "C30",
+   "title": "009 calibration graph seeds",
+   "notebooks": [
+    "009"
+   ],
+   "finding_ids": [
+    "SEED-5",
+    "MISSED-seeds-5"
+   ],
+   "owner_decision": "none",
+   "why": "SEED-5 and a missed item: the seed of the fixed calibration graphs for control (b) was defined two ways (per replicate q, and once per seed), the draw order was not stated, and offset +6 was missing from the offset table.",
+   "change_text": "Amendment C30. The calibration graphs for control (b) are built once per synthetic seed j = 0 to 19, from the +6 stream of r = 1000 + j (that is, q = 0): Philox key (20260720 + 1000*(1000 + j) + 6, 0) (Amendment C01). Consumption order: graph 1, then graph 2, then graph 3; within a graph, points i in ascending order; for each point, its neighbours by a partial Fisher-Yates over its eligible set in ascending index order, as the chance sampler does (009:172-173); background points of graphs 2 and 3 in the same pass. The same graph set is reused unchanged for every replicate q = 0 to 199. Offset +6 is added to the offset table as \"calibration graphs for (b) (calibration pseudo-recordings only)\".",
+   "per_notebook_edits": [
+    {
+     "notebook": "009",
+     "supersedes": "009:230 \"and +6 for the random draws that build the calibration graphs for (b)\" (stream now fixed per j); 009:263 \"The graphs are built once per seed from true labels and times, with offset +6\" (order now stated); 009:221-228 offset table (row +6 added).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Fills a gap with the stricter, fixed-per-seed reading before the calibration runs; no threshold changes."
+  },
+  {
+   "id": "C31",
+   "title": "010 governing arm pinned to the approved A2",
+   "notebooks": [
+    "010"
+   ],
+   "finding_ids": [
+    "MISSED-ids-1",
+    "MISSED-ids-4",
+    "APPR-15",
+    "FRZ-3"
+   ],
+   "owner_decision": "none",
+   "why": "A missed item, APPR-15 and FRZ-3: the runner check only required the file to be committed and clean, so a later clean commit saying A1 would pass, and 010 says two different things about a missing file.",
+   "change_text": "Amendment C31. (1) The only non-literal value accepted in tools/experiments/exp010_governing_arm.json is \"A2\", the arm the owner approved on 2026-09-29 (010:351). The runner asserts governing_arm === \"A2\" and that the file's git blob equals 9b72d1394fdf17cfd34535b622b1b203e96fc851 (committed in 63077d1), unless a later dated, owner-approved amendment names a new blob. (2) A missing, untracked or modified file stops the runner (010:348). The literal arm governs only if an owner-approved committed file says \"literal\" explicitly. (3) \"A2 (or A1) governs\" and \"(A2 or A1, whichever governs)\" are read as \"A2 governs\"; A1 never governs under this pre-registration.",
+   "per_notebook_edits": [
+    {
+     "notebook": "010",
+     "supersedes": "010:10 \"Without that file, the literal rule governs\"; 010:478 first cell \"No committed governing-arm file, or the file says `\\\"literal\\\"`\"; 010:431 \"(A2 or A1, whichever governs)\"; 010:480-483 \"A2 (or A1) governs\"; 010:25 \"the amended null (A2, or A1)\" (read as \"the amended null (A2)\").",
+     "extra": ""
+    }
+   ],
+   "strictness": "Pins the approved value and removes a contradictory default; stricter only."
+  },
+  {
+   "id": "C32",
+   "title": "010 status and factual corrections; revision log created",
+   "notebooks": [
+    "010"
+   ],
+   "finding_ids": [
+    "APPR-14",
+    "APPR-16",
+    "SD-10",
+    "INC-3",
+    "STALE-1",
+    "CODE-19",
+    "XREF-20",
+    "XREF-26",
+    "MISSED-seeds-3"
+   ],
+   "owner_decision": "none",
+   "why": "APPR-14, APPR-16, SD-10, INC-3, STALE-1, CODE-19, XREF-26 and a missed item: 010 still calls A2 a proposal awaiting approval, understates the bandwidth failure, credits the 3682 Hz limit to a test that does not check it, points to a table \"below\" that is above, and has no revision log.",
+   "change_text": "Amendment C32. (1) The owner approved A2 as the governing arm on 2026-09-29, after first approving A1 (010:351; tools/experiments/exp010_governing_arm.json); the passages that describe A2 as proposed or ask for approval are historical. (2) The bandwidth ordering already reverses at 30 dB SNR as well as at 20 dB (tools/test/window_descriptors.test.js, \"LIMITATION: bandwidth ordering reverses at 30 and 20 dB SNR\"; tools/lib/window_descriptors.js, \"already REVERSED at 30 dB SNR\"), so the width control may fail at both gating SNR levels (30 and 15 dB). The family gate, the pitch exclusion and every threshold are unchanged. (3) The limit of about 3682 Hz for pitch is documented in tools/lib/window_descriptors.js (pitch definition and caveats) and follows from tools/lib/analysis.js (the HPS search ends at floor(bins/3) = 171 bins); the test file does not assert it. (4) \"seeded stream from the table below\" means the seed table above (\"Negative control random seed\"). (5) A revision log is created in Reproducibility Notes. Its first entries: \"2026-09-29: pre-registration written and revised the same day after an internal critique (010:336, 'kept from the previous version'); the individual changes of that revision were not logged at the time and are not reconstructed here.\" and \"2026-09-29: the owner approved A1, then A2 as the governing arm (010:351).\"",
+   "per_notebook_edits": [
+    {
+     "notebook": "010",
+     "supersedes": "010:10 \"proposed as the governing arm\" and \"**The governing arm must be approved by the project owner and committed ... before the run**\" (approval given); 010:347 \"**This notebook proposes `\\\"A2\\\"`**; the owner is asked to approve that choice (or to choose `\\\"literal\\\"`), not A1 alone.\"; 010:490 \"(proposed: A2)\"; 010:35 \"the ordering is reversed at 20 dB SNR on synthetic band noise\"; 010:65 \"the bandwidth descriptor's ordering is reversed at 20 dB SNR ... so the width control may fail at 15 dB\"; 010:36-37 \"cannot report f0 above about 3682 Hz ... Both are asserted in `tools/test/window_descriptors.test.js`\"; 010:454 \"cannot report f0 above about 3682 Hz\" (attributed to the test file); 010:313 \"seeded stream from the table below\"; 010:3 Date line (no revision was recorded).",
+     "extra": "Add the C02 revision entry to the new log."
+    }
+   ],
+   "strictness": "Status and factual corrections only; the width-family risk statement becomes more cautious and no threshold changes."
+  },
+  {
+   "id": "C33",
+   "title": "010 V1: the SNR pairing is disclosed",
+   "notebooks": [
+    "010"
+   ],
+   "finding_ids": [
+    "SEED-10",
+    "SEED-2",
+    "MISSED-seeds-4"
+   ],
+   "owner_decision": "none",
+   "why": "SEED-10, SEED-2 and a missed item: the 200 pooled V1 runs are 100 seeds each run at two SNR levels that share the clean signal and the background, but the Clopper-Pearson bounds did not disclose it, and two V1 backgrounds overlapped under the legacy generator.",
+   "change_text": "Amendment C33. The 200 pooled V1 runs are 100 seeds (5 types x 20 seeds), each run at SNR 30 and 15 dB. The two runs of a seed share the clean signal and the same background realisation, rescaled (010:235). They are not 200 independent units. Next to the pooled V1 rate and its Clopper-Pearson bounds the notebook states this pairing, and it also reports the rate at each SNR with its own Clopper-Pearson bounds (100 units each). The bootstrap unit stays the seed (010:217). Under Amendment C01, every V1 background is its own Philox stream, so no two V1 units share background values. The >= 0.90 gate and its pooled definition are unchanged.",
+   "per_notebook_edits": [
+    {
+     "notebook": "010",
+     "supersedes": "010:217 \"where units share a recording (V2(b-rep), V2(c), per-axis tallies) this is stated next to the bound\" (V1 pairing added); 010:213 \"pooled over the 5 primary types × 20 seeds × SNR {30, 15} (200 runs)\" (pairing disclosed; per-SNR bounds added).",
+     "extra": ""
+    }
+   ],
+   "strictness": "Adds disclosure and extra reported bounds; the gate is unchanged."
+  },
+  {
+   "id": "C34",
+   "title": "011 factual corrections",
+   "notebooks": [
+    "011"
+   ],
+   "finding_ids": [
+    "STALE-4",
+    "APPR-20",
+    "STALE-1",
+    "XREF-20",
+    "APPR-23",
+    "MISSED-approvals-1",
+    "MISSED-code-4",
+    "MISSED-code-1"
+   ],
+   "owner_decision": "none",
+   "why": "STALE-4, APPR-20, STALE-1, XREF-20, APPR-23 and missed items: 011 says \"a few percent\" was not found, still implies a result could permit \"sound alike\", quotes pilot numbers the run will not re-derive, and says the per-component ratios are not exported although the browser port already emits them.",
+   "change_text": "Amendment C34. (1) \"A few percent\" is in 06_Technical_Architecture/Technical_Architecture.md:118 (\"typically a few percent\"). It is a documentation claim handled by 008 rule 2 and the Phase 6 documentation fix; it is not added to this audit's closed claim set (011:40). (2) L4: perceptual wording such as \"sound alike\" is never permitted, whatever any experiment finds (007:385, 009:61, 011:192, 009:484). (3) The runner re-derives every pilot value quoted in Unexpected Observations (011:423-426) into an edge_fixture_pilot block of the results JSON and logs any difference; the quoted values stay planning facts, not results. (4) The Node exporter does not export pcaExplainedVarianceRatio, but the browser port app/src/analysis/pipeline.ts already emits it, unchecked by parity; Amendment C19 adds it to the exporter and to the parity check.",
+   "per_notebook_edits": [
+    {
+     "notebook": "011",
+     "supersedes": "011:34 \"\\\"A few percent\\\" was **not** found by text search in either repo on 2026-09-29\"; 011:35 \"Whether this means \\\"sound alike\\\" is exactly what Experiment 007 (edge-wording gate) and Experiment 009 decide. It is not yet backed.\"; 011:88 \"None of these exist yet\" (for pcaExplainedVarianceRatio, true for the Node exporter only); 011:419 \"The payload exports only `pcaExplainedVarianceTotal`\" (Node exporter only).",
+     "extra": "The Unexpected Observations section keeps its pre-run observations; no results are added."
+    }
+   ],
+   "strictness": "Factual corrections and an added re-derivation; no rule is loosened."
+  },
+  {
+   "id": "C35",
+   "title": "012 factual corrections",
+   "notebooks": [
+    "012"
+   ],
+   "finding_ids": [
+    "APPR-18",
+    "CODE-20",
+    "INC-5",
+    "SD-17",
+    "XREF-27",
+    "SD-13",
+    "SD-15",
+    "APPR-10",
+    "XREF-28"
+   ],
+   "owner_decision": "none",
+   "why": "APPR-18, CODE-20, INC-5, SD-17, XREF-27, SD-13, SD-15: 012 says no browser tool is assumed although the owner chose Playwright, leaves 011 out of its re-run list, calls the 700 cap a point cap, and does not say whether its band label uses a CI.",
+   "change_text": "Amendment C35. (1) The browser automation tool is Playwright, chosen by the owner on 2026-09-29 (012:293), as a dev-only dependency; it is not installed yet; its version is logged at run time. (2) Before a changed window ships, every v2 experiment that defines PR at 0.15 s, Experiments 007 to 011, must be re-run or explicitly caveated. (3) The hop widens so that a recording yields at most 700 windows before the amplitude filter. (4) The descriptive band label uses the 95% paired-bootstrap CI of the mean difference: \"inside the ±0.02 band\" if the CI lies entirely inside [-0.02, 0.02], \"outside\" if it lies entirely outside, and \"overlaps the band edge\" otherwise. This is a CI rule, stricter than Experiment 001's point-estimate tie band, and it stays descriptive.",
+   "per_notebook_edits": [
+    {
+     "notebook": "012",
+     "supersedes": "012:576 \"The browser automation tool and its version are logged; none is installed or assumed by this document.\"; 012:500 \"(Experiments 007–010)\"; 012:69 \"so that a recording yields at most 700 points\"; 012:362 \"labelled \\\"inside / outside the ±0.02 band\\\" (Experiment 001's tie band)\"; 012:293 \"installed as a dev-only dependency of this repo\"; 012:506 \"the ±0.02 band labels come from Experiment 001\".",
+     "extra": ""
+    }
+   ],
+   "strictness": "Factual corrections; the re-run list and the band label become stricter."
+  }
+ ],
+ "shared_file_edits": "(1) 04_Literature/Literature_Database.md: add two rows to the table, in its 6-column format (Citation Key | Full Citation | Key Finding | Relevant Work Package | Confidence | Notes).\nRow A, key Salmon2011. Full citation: Salmon, J. K., Moraes, M. A., Dror, R. O. & Shaw, D. E. (2011). Parallel random numbers: as easy as 1, 2, 3. In *Proceedings of 2011 International Conference for High Performance Computing, Networking, Storage and Analysis* (SC '11), Seattle, Washington, pp. 1–12. ACM. https://doi.org/10.1145/2063384.2063405. Key finding: introduces counter-based pseudo-random number generators, including the Philox family that Philox4x32-10 belongs to; each output block is a keyed function of a counter, so distinct keys give distinct streams without a shared cycle. Work package: WP3, WP4, WP5 (all v2 negative controls, surrogates and bootstraps). Confidence: High (bibliographic data, Crossref); Medium (contents, taken from the Random123 reference test vectors and the owner's decision record; full text not read). Notes: Relevance to v2.0: generator for every governing random stream in Experiments 007–012 (owner decision OD-1, Leonard Lind (project owner), 2026-09-29, working session; Amendment C01), implemented in tools/lib/rng.js and tested against the official Random123 known-answer vectors, https://raw.githubusercontent.com/DEShawResearch/random123/main/tests/kat_vectors. Header format there: \"#nameNxW R CTR KEY EXPECTED\". The three philox4x32 10 lines, verbatim: \"philox4x32 10 00000000 00000000 00000000 00000000 00000000 00000000   6627e8d5 e169c58d bc57ac4c 9b00dbd8\"; \"philox4x32 10 ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff   408f276d 41c83b0e a20bc7c6 6d5451fd\"; \"philox4x32 10 243f6a88 85a308d3 13198a2e 03707344 a4093822 299f31d0   d16cfe09 94fdcceb 5001e420 24126ea1\" (4 counter words, then 2 key words, then 4 expected output words). Verified 2026-09-29: Crossref metadata (https://api.crossref.org/works/10.1145/2063384.2063405: title \"Parallel random numbers\", subtitle \"as easy as 1, 2, 3\"; authors Salmon, Moraes, Dror, Shaw; SC '11, Seattle, Washington; published 2011-11-12; pages 1-12; ACM) and the KAT file above. Full text not read.\nRow B, key sklearnTSNE. Full citation: scikit-learn developers. sklearn.manifold.TSNE, scikit-learn 1.9.1. Documentation https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html; source sklearn/manifold/_t_sne.py at tag 1.9.1, https://raw.githubusercontent.com/scikit-learn/scikit-learn/1.9.1/sklearn/manifold/_t_sne.py. Key finding: defaults of TSNE 1.9.1: perplexity=30.0, early_exaggeration=12.0, learning_rate='auto' (\"sets the learning_rate to max(N / early_exaggeration / 4, 50)\"), max_iter=1000, n_iter_without_progress=300, min_grad_norm=1e-07, init='pca' (default since 1.2), method='barnes_hut'. In the source: _EXPLORATION_MAX_ITER = 250; momentum 0.5 in the exploration phase, then 0.8; gains[inc] += 0.2, gains[dec] *= 0.8, clipped at min_gain=0.01; X_embedded = X_embedded / np.std(X_embedded[:, 0]) * 1e-4 for PCA initialisation; degrees_of_freedom = max(self.n_components - 1, 1); update = np.zeros_like(p) and gains = np.ones_like(p) are created inside _gradient_descent at each call. Work package: WP3. Confidence: High (defaults read from the 1.9.1 documentation and source); version-specific; not peer reviewed. Notes: Relevance to v2.0: the reference convention for Experiment 007 R4–R6 (007:167–175; Amendment C27). R4 names scikit-learn \"≥ 1.2\"; only 1.9.1 was read. The project implementation differs from scikit-learn in: exact method (not Barnes–Hut), no early stopping, default perplexity rule, and, per the tools/lib/reducers.js header (not re-verified here), the gradient for degrees of freedom other than 1. Verified 2026-09-29 by fetching the two URLs above (the source statements were read from the fetched file; the re-creation of update and gains inside _gradient_descent was confirmed with a second, verbatim fetch). The editor adding this row re-opens both URLs and confirms each quoted line before the 007 freeze (work item W19).\n(2) 03_Research_Notebook/Corpus_v2.md, section \"Technical profile\", directly after the bullet \"**Tool versions:** ffmpeg `6.0` (ffmpeg-static) and ffprobe `n4.4.1` ...\": add a dated note, without changing the bullet: \"Note (2026-09-29, pre-run consistency amendments to Experiments 007–012): these are the versions on the machine that built the manifest. By owner decision OD-5 (Leonard Lind, project owner, 2026-09-29, working session), Experiment 012 Part A certifies the exact binary it runs on; the approved reference machine is a Windows PC on which the same ffmpeg-static package resolves to \"ffmpeg version 6.1.1-essentials_build-www.gyan.dev\" (win32-x64), with ffprobe from @ffprobe-installer/win32-x64. So the npm package does not pin the decoder version across platforms. Every v2 runner logs its ffmpeg/ffprobe version strings and binary SHA-256, and each experiment's freeze records them (Amendment C02); where a runner uses decodedSamples22050 it re-derives it on its own binary and logs any difference as a deviation. The manifest itself is the corpus of record and is not rewritten.\" (3) New file 03_Research_Notebook/Pre_Run_Audit_Worklist_2026-09-29.md. It is a working list for the owner, not a pre-registration: it is outside every experiment's hashed pre-registration span and outside every runner's require graph, so it is not part of any OD-2 freeze, and it changes no rule. Why: the deferred work items, the owner items, the recommended run order and the per-finding dispositions of this round otherwise exist only in the session scratchpad and are lost when the session ends. Several findings are handled only by work or owner items (APPR-26, XREF-16, XREF-19, CODE-5, CODE-6, CODE-9, MISSED-code-3 and, in part, MISSED-cross-3), and the Literature row sklearnTSNE in (1) already names \"work item W19\", which only this file defines. Content, in this order. Sections (b) to (e) are copied verbatim from this spec (IDs, wording, finding IDs and needed-before text unchanged; nothing dropped, nothing reworded); the only text not copied from the spec is the header in (a). (a) Title \"Pre-run audit worklist (2026-09-29)\", then these three lines verbatim: \"Status: working list for the owner; not pre-registered; not frozen; changes no rule. Where this list and a notebook differ, the notebook and its amendments govern.\"; \"Source: the pre-run consistency amendments C01-C35 to Experiments 007-012 (2026-09-29), made after an independent 12-agent audit (6 lenses, each finding re-checked by a skeptic; 127 findings, 0 refuted).\"; \"Work-item IDs W01-W25 are unrelated to Experiment 012's window arms W10, W15 and W25. 'The W15 cross-check' and '012 Part B W15' mean the window arm W15 (012:333); 'work item W15' and 'W15/W24' mean the work items.\" (b) Section \"Owner items\": every entry of owner_items, as a numbered list 1-14 in spec order. (c) Section \"Recommended run order (advisory)\": recommended_run_order. (d) Section \"Deferred work items\": a table with columns ID | What | Findings | Needed before, one row per entry W01-W25 of deferred_work_items, in spec order. (e) Section \"Finding disposition\": a table with columns Finding | Disposition, one row per entry of finding_disposition, in spec order. The file is written into the working tree only. It is committed only by a commit the owner approves (owner item 14). Until then, the orchestrator also hands the owner items, the work items W01-W25 and the finding disposition table to the owner in its final report of this round, so they are not lost when the session ends. Apart from creating the new file in (3), no other shared file is edited in this round (not the Decision Log, not HANDOFF_v2.md, not code).",
+ "deferred_work_items": [
+  {
+   "id": "W01",
+   "what": "tools/lib/rng.js: Philox4x32-10 with key (seed, subStream) and 128-bit block counter from 0 (word 0 least significant); word stream; uniform53 = ((a>>>5)*2^26 + (b>>>6))/2^53; normal (cosine branch, u1 clamped >= 1e-12); integer, range, phase and Fisher-Yates helpers exactly as Amendment C01 (4)-(7). Unit tests: the 3 official philox4x32 10 known-answer vectors (listed in shared_file_edits), determinism, distinct keys give different streams, mean/SD/Kolmogorov-Smirnov sanity checks of uniforms and normals on a fixture.",
+   "finding_ids": [
+    "SEED-1 (seeds)",
+    "SEED-2",
+    "SEED-3",
+    "SEED-6",
+    "SEED-11"
+   ],
+   "needed_before": "Any v2 run of 007-012 and the first freeze (rng.js is in every runner's frozen require graph)."
+  },
+  {
+   "id": "W02",
+   "what": "Wire Philox into the shared code, keeping the legacy path only for pre-v2 reproduction: metrics.randomMatchedMatrix, columnPermutedMatrix, bootstrapCI, pairedBootstrapCI and circularShiftNull (random mode) take an explicit Philox stream; reducers reduceUmap (random function), reduceRandomProjection and reduceTsne random init take Philox; synth.js v2 mode (signal subStream 0, background subStream 1, cosine-only normals), and a Philox replacement for the 012 jitter use of synth.mulberry32. In v2 mode make these errors: omitted seed (synth DEFAULTS seed 1 at synth.js:38; reducers `seed ?? 0` at reducers.js:336, 557, 660, 705, 748; metrics DEFAULT_SEED at metrics.js:697, 904, 930); reduceFeatures namespaced seed or dimensions differing from top level (reducers.js:748). Tests: v2 constructors fed the legacy LCG reproduce the Experiment 001 functions bit for bit; the existing legacy equivalence tests stay green.",
+   "finding_ids": [
+    "SEED-7",
+    "SEED-8",
+    "MISSED-seeds-2"
+   ],
+   "needed_before": "Any v2 run and the first freeze."
+  },
+  {
+   "id": "W03",
+   "what": "Per-experiment seed/stream tests (e.g. tools/test/seeds.test.js): every seed value and every (seed, subStream) key used by each experiment is unique; no legacy generator (metrics.makeRandom, reducers makeRandom, synth.mulberry32) is reachable from v2 governing code (require-graph walk plus call interception); runner start-up assertions that every returned details.seed equals the seed-table value.",
+   "finding_ids": [
+    "SEED-7"
+   ],
+   "needed_before": "Each experiment's freeze."
+  },
+  {
+   "id": "W04",
+   "what": "tools/lib/preregistration.js with node:test tests: canonical notebook text and hash (C02), allowed-insertion diff check (Date/Status lines, below 'Pending run.' / 'to be recorded here at run time' lines, Freeze-record values, Deviations list), require-graph walker for tools/ modules and data/config files, git blob hashing, package name/version/integrity from package-lock.json for loaded packages, ffmpeg/ffprobe binary SHA-256/version/platform/arch, sidecar tools/experiments/exp0NN_freeze.json read and compare, override flag marking output 'exploratory, not pre-registered', results-commit ancestor check (git merge-base --is-ancestor); experiment-specific checks: 010 governing_arm === 'A2' with blob 9b72d1394fdf17cfd34535b622b1b203e96fc851 (C31); 009 A1 sign-off record and A1 text hash (C02); checkpoint hash verification (C18). Also creates 05_Benchmark_Results/v2/.",
+   "finding_ids": [
+    "FRZ-1",
+    "FRZ-2",
+    "FRZ-3",
+    "MISSED-ids-1",
+    "MISSED-ids-3",
+    "MISSED-ids-6"
+   ],
+   "needed_before": "Any freeze (all six experiments)."
+  },
+  {
+   "id": "W05",
+   "what": "metrics.gapExcludedTrustworthiness in tools/lib/metrics.js per Amendment C10 (j != i; gap in seconds or integer start-frame predicate; skip and count points with m_i < 2k; no-exclusion case in the same summation order as metrics.trustworthiness). Tests: gap 0 equals T to <= 1e-12 and bitwise; no excluded pairs equals T bitwise; frame predicate |delta start frame| >= 7.",
+   "finding_ids": [
+    "SD-18",
+    "XREF-18",
+    "XREF-23",
+    "CODE-5",
+    "CODE-14",
+    "APPR-09",
+    "MISSED-cross-5"
+   ],
+   "needed_before": "007, 008 and 012 Part B runs."
+  },
+  {
+   "id": "W06",
+   "what": "Edge tooling in tools/lib: (a) 007's edge-fidelity EF with A_i built by the exporter's arithmetic (POSITION_SPREAD-scaled positions, square-root distance, stable sort), EF_undirected and chance level; tests: hand-computed fixture, union of A_i equals buildSimilarityEdges; (b) 009's generalised edge builder (k, gap, space, precomputed distance matrix) reproducing buildSimilarityEdges exactly at (3, 1.5 s) on E3 (C15).",
+   "finding_ids": [
+    "CODE-5",
+    "CODE-9",
+    "CODE-18",
+    "MISSED-code-2"
+   ],
+   "needed_before": "007 (EF) and 009."
+  },
+  {
+   "id": "W07",
+   "what": "Observer-cluster bootstrap in tools/lib/metrics.js (resample recordistLogin clusters, fallback recordist, paired, Philox stream) and 010's cluster bootstrap by scores-recording. Tests: deterministic for a fixed key; with singleton clusters it equals the ordinary paired bootstrap on a fixture.",
+   "finding_ids": [
+    "CODE-5",
+    "APPR-09",
+    "SD-18",
+    "XREF-18"
+   ],
+   "needed_before": "007, 008 and 010 runs."
+  },
+  {
+   "id": "W08",
+   "what": "Complex FFT/iFFT in tools/lib/fft.js (radix-2 for 007/012 surrogate S; exact length-n Bluestein DFT for 010 A2) and one shared phase-randomised surrogate generator (C01 007 note). Tests: round trip <= 1e-9; Hermitian symmetry of the surrogate spectrum; Bluestein vs direct O(n^2) DFT <= 1e-9 relative for n in {97, 234, 515, 556, 700}; surrogate magnitude preservation; seed determinism.",
+   "finding_ids": [
+    "CODE-5",
+    "SD-18",
+    "XREF-18",
+    "APPR-09"
+   ],
+   "needed_before": "007, 010 and 012 Part B runs."
+  },
+  {
+   "id": "W09",
+   "what": "Helpers with tests: principal angles between the production and EVD PCA subspaces for d = 1, 2, 3 (007:281, e.g. via ml-matrix SVD of Q1^T Q2); full-signal cross-correlation lag between x_b and x_s (012:297).",
+   "finding_ids": [
+    "MISSED-code-3",
+    "CODE-5"
+   ],
+   "needed_before": "007 run (principal angles); 012 A.8 run (cross-correlation)."
+  },
+  {
+   "id": "W10",
+   "what": "Tested tools/lib wrapper for the exact symmetric EVD of the n x n Gram matrix of standardizeFlat(X) with the 0.95 rule capped at n - 1, using ml-matrix 6.14.0 (EVD / EigenvalueDecomposition, assumeSymmetric: true), with a start-up presence/version assertion; test against the Jacobi reference already in reducers.test.js. Optional: add ml-matrix 6.14.0 as a direct dependency only if the owner asks (package.json change).",
+   "finding_ids": [
+    "CODE-8",
+    "MISSED-approvals-6",
+    "D95-1",
+    "CODE-2"
+   ],
+   "needed_before": "007, 008 (C06), 009 and 011 (G2a.2) runs."
+  },
+  {
+   "id": "W11",
+   "what": "tools/lib/view_preservation.js (008:142-162) with the export-time flag function, F1 lookup-table build step, rule-1 classifier and the C03 joint outcome/label builder, Cohen's kappa, split-half assignment, SNR proxy; exporter wiring (viewPreservation block with the C03 fields); tools/test/view_preservation.test.js with the 7 cases of 008:531-538 plus the tests of 008:539-545.",
+   "finding_ids": [
+    "XREF-19",
+    "CODE-9",
+    "CODE-5",
+    "APPR-09"
+   ],
+   "needed_before": "008 run; the exporter wiring before 011."
+  },
+  {
+   "id": "W12",
+   "what": "tools/lib/axis_meaning.js (010:540): labelling rule, A1 p-value (via circularShiftNull custom statistic atanh(clamp(rho)) with a unit test), A2 AAFT surrogates with the C01 key layout and Bluestein DFT, mismatched-pair construction, Clopper-Pearson, partial Spearman, split-half matching, band pooling, the axisMeaning schema of C21, the owner-approved caption table of C22; exporter wiring; tools/test/axis_meaning.test.js with the full list of 010:553-569.",
+   "finding_ids": [
+    "XREF-19",
+    "CODE-5",
+    "CODE-9"
+   ],
+   "needed_before": "010 run; the exporter wiring before 011."
+  },
+  {
+   "id": "W13",
+   "what": "009 code and tests: cosine distance builder with the max(0, 1 - cos) clamp and counts, index-arithmetic chance/stability sampler with its naive-equivalence test, order-statistic (sign-test) CI fallback, the A1 check, the --calibrate mode with per-replicate checkpoints and Philox keys (C01, C30), and tools/test/experiment_009_similarity_edge_space.test.js (009:481).",
+   "finding_ids": [
+    "CODE-5",
+    "CODE-6",
+    "CODE-9"
+   ],
+   "needed_before": "009 calibration and run."
+  },
+  {
+   "id": "W14",
+   "what": "Shared tools/lib module for per-point audio offsets and span (C19), called by tools/export_single_recording_dataset.js, with app/src/analysis/pipeline.ts changed in lockstep; add pcaExplainedVarianceRatio to the Node exporter; extend tools/verify_browser_port_parity.mjs to all new fields including per-component ratios (must print PARITY OK); document the offset convention.",
+   "finding_ids": [
+    "XREF-6",
+    "XREF-17",
+    "CODE-7",
+    "MISSED-code-1"
+   ],
+   "needed_before": "012 Part A run (else it can only reach R2) and 011 run; preferably before the first freeze so every runner freezes the same exporter."
+  },
+  {
+   "id": "W15",
+   "what": "011 Step 0: payload fields fitScope, display, evidence blocks (with the C24 statuses and the C14 consistency result), axisMeaning, viewPreservation, similaritySpace; tools/lib/description.js generator (deterministic, allowlisted reads); independent checker tools/experiments/check_experiment_011_descriptions.js written by a different author working only from the notebook; tools/test/description_templates.test.js (A1 list incl. S2c, G2a.4, G2b.4, G7.4) and the checker's own tests; release assertions.",
+   "finding_ids": [
+    "XREF-6",
+    "XREF-19",
+    "CODE-7",
+    "CODE-9"
+   ],
+   "needed_before": "011 run (generation step)."
+  },
+  {
+   "id": "W16",
+   "what": "012 runners: tools/experiments/run_experiment_012_compare_mode_timing_and_grid_sensitivity.js (Part A and Part B as separate invocations, C14) and tools/experiments/run_experiment_012_browser_parity.js; install Playwright as a devDependency (owner-approved); source-native decode through a stream or maxBuffer >= 256 MiB; re-derivation of decodedSamples22050 and the pre-count tables on the certifying binary (C05); tests of 012:594-598 (scorer fixtures, Part B front-end parity, independent grid, complex FFT round trip, zero-phase lowpass).",
+   "finding_ids": [
+    "APPR-10",
+    "CODE-9",
+    "CODE-6",
+    "CODE-1"
+   ],
+   "needed_before": "012 freeze and run (Playwright before the 012 freeze)."
+  },
+  {
+   "id": "W17",
+   "what": "The six runners (tools/experiments/run_experiment_0NN_<name>.js) and every unit test each notebook lists (007:469-477, 008:530-545, 009:481, 010:553-569, 011:470-474, 012:593-599), with start-up checks: freeze verification (W04), per-test status by name including skips (C12), label-invariance test, production parity checks, seed tables with keys (W03).",
+   "finding_ids": [
+    "CODE-6",
+    "CODE-9",
+    "CODE-10"
+   ],
+   "needed_before": "Each experiment's freeze and run."
+  },
+  {
+   "id": "W18",
+   "what": "Consistency-check script in tools/experiments (C14) comparing 007 with 008 (T_real, T_G per subset, d95 by EVD and by pca(X, null) per C06, T_gap1.5) and 007 with 012 Part B W15 real T; writes a recorded pass/fail read by the evidence blocks.",
+   "finding_ids": [
+    "XREF-5",
+    "MISSED-ids-2"
+   ],
+   "needed_before": "Any use of 007, 008 or 012 Part B results in the viewer, exports, the Decision Log or 011."
+  },
+  {
+   "id": "W19",
+   "what": "Citations: add the verified Salmon2011 (Philox) and sklearnTSNE rows to 04_Literature/Literature_Database.md, re-opening the URLs to confirm every quoted line; find and add a verified citation for the circular-shift (rotation) null (010:520).",
+   "finding_ids": [
+    "FRZ-4",
+    "APPR-08",
+    "CODE-11"
+   ],
+   "needed_before": "Philox row: before the first v2 run; sklearnTSNE row: before the 007 freeze (007:173); rotation-null citation: before 010's results are written up (010:520)."
+  },
+  {
+   "id": "W20",
+   "what": "Optional: extend pca() in tools/lib/reducers.js and app/src/analysis/pca.ts in lockstep to return the lambda-4 probe's iterations, residual and converged flag, keeping the bit-identical parity test (reducers.test.js:310) green; otherwise C16's 'approximate' marking applies.",
+   "finding_ids": [
+    "CODE-15"
+   ],
+   "needed_before": "007 and 008 runs, only if the owner chooses it."
+  },
+  {
+   "id": "W21",
+   "what": "Claim clean-up in code comments and viewer copy: app/src/analysis/pipeline.ts:130 and tools/export_single_recording_dataset.js:70 and :565 ('sound alike'), plus app/src/scene2/CloudSceneV2.tsx:265 (011 L4); exporter and browser port in lockstep.",
+   "finding_ids": [
+    "APPR-13"
+   ],
+   "needed_before": "Phase 4/5 shipping (not a run prerequisite; if done before a freeze, the exporter blob changes accordingly)."
+  },
+  {
+   "id": "W22",
+   "what": "Unit test that metrics.standardize, reducers.standardize and reducers.standardizeFlat are bitwise identical on a fixed fixture (C13).",
+   "finding_ids": [
+    "SD-8",
+    "XREF-24",
+    "MISSED-regime-4"
+   ],
+   "needed_before": "007, 008 and 012 Part B runs."
+  },
+  {
+   "id": "W23",
+   "what": "Checkpoint/resume for 010 (per unit) and hash-checked checkpoints for 009 (per recording/arm and per calibration replicate) per C18; test that an interrupted-and-resumed run gives the same unit-result SHA-256 as an uninterrupted run; worker-count invariance test (010:563).",
+   "finding_ids": [
+    "APR-2",
+    "APPR-17",
+    "SD-19"
+   ],
+   "needed_before": "009 and 010 runs."
+  },
+  {
+   "id": "W24",
+   "what": "Exporter evidence plumbing: viewPreservation block carrying the C03 joint outcome, label text, flag-allowed flag and results-file SHA-256s; axisMeaning block per C21; evidence blocks with C24 statuses; similaritySpace field (C23).",
+   "finding_ids": [
+    "XREF-7",
+    "XREF-14",
+    "XREF-9",
+    "XREF-13"
+   ],
+   "needed_before": "011 run."
+  },
+  {
+   "id": "W25",
+   "what": "Payload contract v2 documentation (tools/GENERATOR.md) aligned with the notebooks: block name viewPreservation (not viewQuality), all three numbers shown together, flag only where C03/008 rule 3 allow, axisMeaning with 010's full gate list and C21 schema, 009's validated state/space/figures for lines, 011's description schema (011:121-132), the C19 offset convention, compare-mode per-format and per-recording eligibility and the 012 caveat.",
+   "finding_ids": [
+    "XREF-16",
+    "XREF-17"
+   ],
+   "needed_before": "Phase 4 export changes ship."
+  }
+ ],
+ "owner_items": [
+  "Perform the OD-2 freeze for each experiment (an owner-approved commit adding tools/experiments/exp0NN_freeze.json) after the amendments and the prerequisites are in place; for 007 give the exposure statement (007:485), covering the smoke/demo exposure and the 010 front-end-only pre-count of every manifest file (Amendment C17).",
+  "Confirm Amendment C02's reading of OD-2: the whole notebook file is frozen (not only up to '## Results') except the named append-only and value fields, and governing synthetic, calibration and fixture arms also wait for the freeze.",
+  "Approve, change or reject the PROPOSED plain-language axis captions and descriptor phrases in Amendment C22 (EN); until approved and audited by 011, S6 and every axis caption stay unshipped.",
+  "Decide on 008's d95 trigger (Amendment C06): keep the pca(X, null)-vs-EVD suspension exactly as written (current default, which may never be liftable if the difference is caused by non-convergence), or approve another handling.",
+  "Decide S7 wording for similarity edges in any space other than E3 if Experiment 009 picks one (Amendment C23); until then S7 is omitted for such edges.",
+  "Recruit the Experiment 011 human reviewers per language (Amendment C04): at least 2 EN lay readers; at least 1 ES and 1 PT lay reader; a human fluent in EN and ES and one fluent in EN and PT for A5; human paraphrase judges fluent in each language; humans for A3(b) and A6. AI agents may do only the mechanical checks. Until humans do these roles, text is generated but not shown.",
+  "Confirm the gap-filling constructions of Amendment C09 at the 007 freeze: synthetic pseudo-recordings r = 800 to 804, the R7 fixture layout (100 points per cluster, centres (10/sqrt 2) e_k) and its control r = 850, and the subStream-1 controls of S (007) and of 012's noise and surrogate inputs.",
+  "Approve a separate freeze record for every Experiment 011 audit run (including each fix-and-re-run, 011:327), and fund any full human review beyond the 2-review budget (011:243).",
+  "OD-5 consequence: if the Mac (ffmpeg 6.0) or any other machine later produces shipped exports, 012 Part A must pass on that build first; choose the machine for the 007-011 corpus runs knowing each freeze records the ffmpeg/ffprobe binaries.",
+  "Assign the final Decision-Log numbers (Amendment C07 map: 007 D-014, 008 D-015, 009 D-016, 010 D-017, 011 D-018, 012 Part A D-019).",
+  "Approve a later update of HANDOFF_v2.md (not edited in this round): the 010 table row 'Includes amendment A1' should name A2 as governing (APPR-26); the bandwidth failure at 30 dB as well as 20 dB (HANDOFF:97, XREF-26); the Phase 3 run order below; the Phase 4/5 field and viewer plan aligned with the notebooks (viewPreservation name, all three numbers together, flag only where allowed, axisMeaning full gates, 009 validated state, 011 description schema, offset convention, compare-mode per-format and per-recording gates and the 012 caveat, 1D/2D uniform scale and edges hidden or labelled as 3D-derived) (XREF-16, XREF-17, MISSED-cross-3).",
+  "Optional: decide whether ml-matrix 6.14.0 becomes a direct dependency in package.json (CODE-8), and whether pca() is extended to return the lambda-4 probe diagnostics (Amendment C16, W20).",
+  "Install Playwright (already approved) when 012 A.8 is prepared, before 012's freeze; if compare mode plays through an <audio> element, approve the dated A.8 capture-method amendment (012:295) before that freeze.",
+  "Approve, before this round of work is closed, the commit of 03_Research_Notebook/Pre_Run_Audit_Worklist_2026-09-29.md (shared_file_edits (3)), which records these owner items, the recommended run order, the work items W01-W25 and the finding disposition table. Until that commit, the untracked file and the list handed to the owner in this round's final report are the only records outside the session scratchpad; the findings handled only by work or owner items (APPR-26, XREF-16, XREF-19, CODE-5, CODE-6, CODE-9, MISSED-code-3 and, in part, MISSED-cross-3) depend on it."
+ ],
+ "recommended_run_order": "Advisory (the hand-off's order is not pre-registered). Stage 0, before any freeze: build the prerequisites W01-W04 (Philox, seed tests, freeze checker), the shared code W05-W10 and W22, and all exporter additions at once (W14 offsets/span fields and pcaExplainedVarianceRatio, W11 viewPreservation wiring, W12 axisMeaning wiring, W24 evidence plumbing), so every runner freezes the same exporter blob; npm test green with no unexpected skips (C12); PARITY OK. Owner reviews the C22 caption drafts before the 010 freeze. Stage 1: freeze and run 007 first. Reasons: 008 takes d95 and its joint labels from 007's JSON (008:221, 008:355; C03, C06), 012 Part B's W15 cross-check needs 007's JSON (012:333), 010's label gate and 011's S2b need 007's verdicts, and running 008 or 012B earlier would push their cross-checks into the later consistency step (C14). Give 007 dedicated cores, because its 24 h subsetting projection is made on the run machine (007:319-320) and concurrent load could trigger subsetting. Stage 2: freeze and run 008 on an otherwise idle machine, because rule 4 timings are invalid under load (008:161, 008:385); then run the C14 consistency step (W18) for 007/008. Stage 3: 012 (after W14 and W16, Playwright installed before its freeze). Part A needs the exporter's offset fields (else it can only reach R2, 012:469) but not 007; Part B needs 007's JSON for the W15 cross-check. Run A.8 separately afterwards; then the 007/012B consistency step. Stage 4: 009 and 010 (each after its own freeze; independent of each other and of 007/008 as run inputs). They may run in parallel with each other or alongside 012, but never during 008's timed blocks or 007's projection; both checkpoint (C18). 010's labels can ship only after 007 (C03) and owner-approved captions (C22). Stage 5: 011 last, after 007-010 are decided and their consistency checks passed, after W15/W24 and the exporter emit evidence, axisMeaning, viewPreservation and similaritySpace, with a freeze per audit run. Its S2a/S2c need 008 (C25), S2b needs 007 and 008 (C26), S6 needs 010 and approved captions (C21, C22), and S7 needs 009 (C23). Running 011 last also avoids spending the 2-review budget on a gated-off first run (011:243). Display per language only after that language's human checks pass (C04).",
+ "finding_disposition": [
+  {
+   "finding_id": "FRZ-1",
+   "disposition": "amendment C02; work item W04; owner item (perform freezes)"
+  },
+  {
+   "finding_id": "FRZ-2",
+   "disposition": "amendment C02 (007 note); amendment C27 (blob note)"
+  },
+  {
+   "finding_id": "FRZ-3",
+   "disposition": "work item W04; amendment C31 (governing-arm pin); amendment C02 (009 A1 record)"
+  },
+  {
+   "finding_id": "FRZ-4",
+   "disposition": "amendment C27; work item W19; Literature row sklearnTSNE"
+  },
+  {
+   "finding_id": "LBL-1",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "APR-1",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "D95-1",
+   "disposition": "amendment C06; owner item (d95 suspension decision); work item W10"
+  },
+  {
+   "finding_id": "ID-1",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "ID-2",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "STALE-1",
+   "disposition": "amendments C29 (009), C32 (010), C34 (011), C35 (012)"
+  },
+  {
+   "finding_id": "STALE-2",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "STALE-3",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "STALE-4",
+   "disposition": "amendment C34"
+  },
+  {
+   "finding_id": "WORD-1",
+   "disposition": "amendment C23"
+  },
+  {
+   "finding_id": "SEED-1 (ids-paths-freeze)",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "APR-2",
+   "disposition": "amendment C18; work item W23"
+  },
+  {
+   "finding_id": "APPR-01",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "APPR-02",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "APPR-03",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "APPR-04",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "APPR-05",
+   "disposition": "amendment C23"
+  },
+  {
+   "finding_id": "APPR-06",
+   "disposition": "amendment C06"
+  },
+  {
+   "finding_id": "APPR-07",
+   "disposition": "amendment C05; Corpus_v2.md note"
+  },
+  {
+   "finding_id": "APPR-08",
+   "disposition": "amendments C27 and C02; work item W19; owner item (007 freeze and exposure statement)"
+  },
+  {
+   "finding_id": "APPR-09",
+   "disposition": "work items W05, W07, W08, W11, W12, W15; amendment C11"
+  },
+  {
+   "finding_id": "APPR-10",
+   "disposition": "work item W16; amendment C35"
+  },
+  {
+   "finding_id": "APPR-11",
+   "disposition": "owner item (recruit reviewers); amendment C04"
+  },
+  {
+   "finding_id": "APPR-12",
+   "disposition": "amendment C29"
+  },
+  {
+   "finding_id": "APPR-13",
+   "disposition": "no action for the 009 title (the quoted phrase is the legacy claim under test, 009:35 and 009:58; verifier refuted that part; noted in C29); work item W21 for the code comments"
+  },
+  {
+   "finding_id": "APPR-14",
+   "disposition": "amendment C32"
+  },
+  {
+   "finding_id": "APPR-15",
+   "disposition": "amendment C31"
+  },
+  {
+   "finding_id": "APPR-16",
+   "disposition": "amendment C32 (revision log created)"
+  },
+  {
+   "finding_id": "APPR-17",
+   "disposition": "amendment C18; work item W23"
+  },
+  {
+   "finding_id": "APPR-18",
+   "disposition": "amendment C35"
+  },
+  {
+   "finding_id": "APPR-19",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "APPR-20",
+   "disposition": "amendment C34"
+  },
+  {
+   "finding_id": "APPR-21",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "APPR-22",
+   "disposition": "amendment C27 (test name corrected; blob note recorded)"
+  },
+  {
+   "finding_id": "APPR-23",
+   "disposition": "amendment C34"
+  },
+  {
+   "finding_id": "APPR-24",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "APPR-25",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "APPR-26",
+   "disposition": "owner item (HANDOFF_v2.md is not edited in this round)"
+  },
+  {
+   "finding_id": "SD-1",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "SD-2",
+   "disposition": "amendments C03 and C26"
+  },
+  {
+   "finding_id": "SD-3",
+   "disposition": "amendment C06"
+  },
+  {
+   "finding_id": "SD-4",
+   "disposition": "amendment C23"
+  },
+  {
+   "finding_id": "SD-5",
+   "disposition": "amendment C25"
+  },
+  {
+   "finding_id": "SD-6",
+   "disposition": "amendment C22"
+  },
+  {
+   "finding_id": "SD-7",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "SD-8",
+   "disposition": "amendment C13; work item W22"
+  },
+  {
+   "finding_id": "SD-9",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "SD-10",
+   "disposition": "amendments C29 and C32"
+  },
+  {
+   "finding_id": "SD-11",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "SD-12",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "SD-13",
+   "disposition": "amendments C27 (007:62), C29 (009:157), C35 (012:69)"
+  },
+  {
+   "finding_id": "SD-14",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "SD-15",
+   "disposition": "amendments C28 (008:357) and C35 (012:362)"
+  },
+  {
+   "finding_id": "SD-16",
+   "disposition": "amendment C17"
+  },
+  {
+   "finding_id": "SD-17",
+   "disposition": "amendment C35"
+  },
+  {
+   "finding_id": "SD-18",
+   "disposition": "work items W05, W07, W08; amendments C10 and C11"
+  },
+  {
+   "finding_id": "SD-19",
+   "disposition": "amendment C18; work item W23"
+  },
+  {
+   "finding_id": "XREF-1",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "XREF-2",
+   "disposition": "amendment C03"
+  },
+  {
+   "finding_id": "XREF-3",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "XREF-4",
+   "disposition": "amendment C06"
+  },
+  {
+   "finding_id": "XREF-5",
+   "disposition": "amendment C14; work item W18; run order"
+  },
+  {
+   "finding_id": "XREF-6",
+   "disposition": "amendment C19; work items W14, W15; run order"
+  },
+  {
+   "finding_id": "XREF-7",
+   "disposition": "amendment C26; work item W24"
+  },
+  {
+   "finding_id": "XREF-8",
+   "disposition": "amendment C25"
+  },
+  {
+   "finding_id": "XREF-9",
+   "disposition": "amendment C21"
+  },
+  {
+   "finding_id": "XREF-10",
+   "disposition": "amendment C22; owner item (approve captions)"
+  },
+  {
+   "finding_id": "XREF-11",
+   "disposition": "amendment C22"
+  },
+  {
+   "finding_id": "XREF-12",
+   "disposition": "amendment C20"
+  },
+  {
+   "finding_id": "XREF-13",
+   "disposition": "amendment C23; owner item (non-E3 wording)"
+  },
+  {
+   "finding_id": "XREF-14",
+   "disposition": "amendments C24 and C23 (point 3)"
+  },
+  {
+   "finding_id": "XREF-15",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "XREF-16",
+   "disposition": "owner item (hand-off update); work item W25"
+  },
+  {
+   "finding_id": "XREF-17",
+   "disposition": "amendment C19; work items W14, W25; owner item (hand-off update)"
+  },
+  {
+   "finding_id": "XREF-18",
+   "disposition": "amendment C11; work items W05, W07, W08"
+  },
+  {
+   "finding_id": "XREF-19",
+   "disposition": "work items W11, W12, W15"
+  },
+  {
+   "finding_id": "XREF-20",
+   "disposition": "amendments C28, C29, C32, C34"
+  },
+  {
+   "finding_id": "XREF-21",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "XREF-22",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "XREF-23",
+   "disposition": "amendment C10; work item W05"
+  },
+  {
+   "finding_id": "XREF-24",
+   "disposition": "amendment C13; work item W22"
+  },
+  {
+   "finding_id": "XREF-25",
+   "disposition": "amendment C25"
+  },
+  {
+   "finding_id": "XREF-26",
+   "disposition": "amendment C32 (010); owner item (HANDOFF:97)"
+  },
+  {
+   "finding_id": "XREF-27",
+   "disposition": "amendment C35"
+  },
+  {
+   "finding_id": "XREF-28",
+   "disposition": "amendments C27 (placeholder), C18 (010 checkpointing), C35 (012:576)"
+  },
+  {
+   "finding_id": "CODE-1",
+   "disposition": "amendment C05; work item W16; Corpus_v2.md note"
+  },
+  {
+   "finding_id": "CODE-2",
+   "disposition": "amendment C06"
+  },
+  {
+   "finding_id": "CODE-3",
+   "disposition": "amendment C04 (OD-4 answers the per-language vs global question: per language)"
+  },
+  {
+   "finding_id": "CODE-4",
+   "disposition": "amendment C23"
+  },
+  {
+   "finding_id": "CODE-5",
+   "disposition": "work items W05, W06, W07, W08, W09, W12, W13"
+  },
+  {
+   "finding_id": "CODE-6",
+   "disposition": "work items W03, W13, W16, W17"
+  },
+  {
+   "finding_id": "CODE-7",
+   "disposition": "amendment C19; work items W14, W15"
+  },
+  {
+   "finding_id": "CODE-8",
+   "disposition": "amendment C11; work item W10; owner item (optional direct dependency)"
+  },
+  {
+   "finding_id": "CODE-9",
+   "disposition": "work items W06, W11, W12, W13, W15, W16, W17"
+  },
+  {
+   "finding_id": "CODE-10",
+   "disposition": "amendment C12 (the environment gaps themselves were resolved: the verifier found the smoke file and all 62 corpus files present)"
+  },
+  {
+   "finding_id": "CODE-11",
+   "disposition": "amendment C27; Literature row sklearnTSNE; work item W19"
+  },
+  {
+   "finding_id": "CODE-12",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "CODE-13",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "CODE-14",
+   "disposition": "amendment C10; work item W05"
+  },
+  {
+   "finding_id": "CODE-15",
+   "disposition": "amendment C16; work item W20 (optional)"
+  },
+  {
+   "finding_id": "CODE-16",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "CODE-17",
+   "disposition": "amendment C29"
+  },
+  {
+   "finding_id": "CODE-18",
+   "disposition": "amendment C15; work item W06"
+  },
+  {
+   "finding_id": "CODE-19",
+   "disposition": "amendment C32"
+  },
+  {
+   "finding_id": "CODE-20",
+   "disposition": "amendment C35"
+  },
+  {
+   "finding_id": "CODE-21",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "CODE-22",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "SEED-1 (seeds)",
+   "disposition": "amendment C01 (009 note = Amendment A1.1); work item W01"
+  },
+  {
+   "finding_id": "SEED-2",
+   "disposition": "amendment C01 (010 note); amendment C33; work items W01, W02"
+  },
+  {
+   "finding_id": "SEED-3",
+   "disposition": "amendment C01 (010 note: A2 key layout and draw order); work item W01"
+  },
+  {
+   "finding_id": "SEED-4",
+   "disposition": "amendment C09"
+  },
+  {
+   "finding_id": "SEED-5",
+   "disposition": "amendment C30"
+  },
+  {
+   "finding_id": "SEED-6",
+   "disposition": "amendment C01 (overlap removed by construction for 007/008, 009 and 012)"
+  },
+  {
+   "finding_id": "SEED-7",
+   "disposition": "amendment C01 (points 11-12); work items W02, W03"
+  },
+  {
+   "finding_id": "SEED-8",
+   "disposition": "amendment C01 (point 11); work item W02"
+  },
+  {
+   "finding_id": "SEED-9",
+   "disposition": "amendment C08"
+  },
+  {
+   "finding_id": "SEED-10",
+   "disposition": "amendment C33"
+  },
+  {
+   "finding_id": "SEED-11",
+   "disposition": "amendment C01 (007, 010 and 012 notes name generator and draw order)"
+  },
+  {
+   "finding_id": "INC-1",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "INC-2",
+   "disposition": "amendment C28"
+  },
+  {
+   "finding_id": "INC-3",
+   "disposition": "amendments C29 and C32"
+  },
+  {
+   "finding_id": "INC-4",
+   "disposition": "amendment C07"
+  },
+  {
+   "finding_id": "INC-5",
+   "disposition": "amendment C35"
+  },
+  {
+   "finding_id": "MISSED-ids-1 (010 governing arm not pinned to A2)",
+   "disposition": "amendment C31; work item W04"
+  },
+  {
+   "finding_id": "MISSED-ids-2 (007/008 cross-check depends on run order)",
+   "disposition": "amendment C14; work item W18"
+  },
+  {
+   "finding_id": "MISSED-ids-3 (run-time fields inside the hashed span)",
+   "disposition": "amendment C02"
+  },
+  {
+   "finding_id": "MISSED-ids-4 (010 contradicts itself on a missing file)",
+   "disposition": "amendment C31"
+  },
+  {
+   "finding_id": "MISSED-ids-5 (exposure disclosure out of date)",
+   "disposition": "amendment C17"
+  },
+  {
+   "finding_id": "MISSED-ids-6 (009 A1 text hash scope/reference)",
+   "disposition": "amendment C02 (009 note); work item W04"
+  },
+  {
+   "finding_id": "MISSED-ids-7 (consistent: decision IDs, paths, approvals)",
+   "disposition": "no action (positive evidence)"
+  },
+  {
+   "finding_id": "MISSED-approvals-1 (011:35 L4 stale)",
+   "disposition": "amendment C34"
+  },
+  {
+   "finding_id": "MISSED-approvals-2 (owner's reviewer decision not recorded in 011)",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "MISSED-approvals-3 (no perceptual phrases in A3 denylist)",
+   "disposition": "amendment C23"
+  },
+  {
+   "finding_id": "MISSED-approvals-4 (no-007 case handled three ways)",
+   "disposition": "amendment C03 (point 6)"
+  },
+  {
+   "finding_id": "MISSED-approvals-5 (manifest 6.0/n4.4.1; decoder not pinned across platforms)",
+   "disposition": "amendments C05 and C02 (binary recorded per freeze); Corpus_v2.md note; owner item (machine choice)"
+  },
+  {
+   "finding_id": "MISSED-approvals-6 (ml-matrix transitive only)",
+   "disposition": "amendment C11; work item W10"
+  },
+  {
+   "finding_id": "MISSED-regime-1 (control seeds missing in 007 and 012 H-B2)",
+   "disposition": "amendment C09"
+  },
+  {
+   "finding_id": "MISSED-regime-2 (two definitions of 'keeps X%')",
+   "disposition": "amendment C25"
+  },
+  {
+   "finding_id": "MISSED-regime-3 (S7 has no runtime toggle gate)",
+   "disposition": "amendment C23 (G7.4)"
+  },
+  {
+   "finding_id": "MISSED-regime-4 (012 double z-scoring)",
+   "disposition": "amendment C13; work item W22"
+  },
+  {
+   "finding_id": "MISSED-regime-5 (translation route looser than owner record)",
+   "disposition": "amendment C04"
+  },
+  {
+   "finding_id": "MISSED-regime-6 (007:456 blob note)",
+   "disposition": "amendment C27"
+  },
+  {
+   "finding_id": "MISSED-cross-1 (010 captions fail 011 A4)",
+   "disposition": "amendment C22"
+  },
+  {
+   "finding_id": "MISSED-cross-2 (010:403 shows 008 flag without rule 3)",
+   "disposition": "amendment C03 (010 note)"
+  },
+  {
+   "finding_id": "MISSED-cross-3 (Phase 5 viewer requirements from 008)",
+   "disposition": "amendment C23 (G7.4 for S7); owner item (hand-off Phase 5 update)"
+  },
+  {
+   "finding_id": "MISSED-cross-4 (012 user-facing texts outside 011)",
+   "disposition": "amendment C20"
+  },
+  {
+   "finding_id": "MISSED-cross-5 (T_span = T exact equality in floating point)",
+   "disposition": "amendment C10; work item W05"
+  },
+  {
+   "finding_id": "MISSED-cross-6 (010 incomplete caption templates)",
+   "disposition": "amendment C22"
+  },
+  {
+   "finding_id": "MISSED-cross-7 (008:411 conditional wording has no S2b gate)",
+   "disposition": "amendment C26"
+  },
+  {
+   "finding_id": "MISSED-code-1 (browser port already emits pcaExplainedVarianceRatio; not parity-checked)",
+   "disposition": "amendments C19 and C34; work item W14"
+  },
+  {
+   "finding_id": "MISSED-code-2 (A_i must use exporter arithmetic)",
+   "disposition": "amendment C15; work item W06"
+  },
+  {
+   "finding_id": "MISSED-code-3 (principal angles and cross-correlation helpers)",
+   "disposition": "work item W09"
+  },
+  {
+   "finding_id": "MISSED-code-4 (011:35 stale)",
+   "disposition": "amendment C34"
+  },
+  {
+   "finding_id": "MISSED-code-5 (environment differences; rounding facts reproduce)",
+   "disposition": "no action (positive evidence; only 012's fixed '6.0' text needed an amendment, C05)"
+  },
+  {
+   "finding_id": "MISSED-seeds-1 (008 grid seeds +600/+611 overlap)",
+   "disposition": "amendment C01 (008 note)"
+  },
+  {
+   "finding_id": "MISSED-seeds-2 (synth.js DEFAULTS seed 1)",
+   "disposition": "amendment C01 (point 11); work item W02"
+  },
+  {
+   "finding_id": "MISSED-seeds-3 (010:313 'table below')",
+   "disposition": "amendment C32"
+  },
+  {
+   "finding_id": "MISSED-seeds-4 (010 V1 background overlap s0/s18)",
+   "disposition": "amendments C01 (010 note) and C33"
+  },
+  {
+   "finding_id": "MISSED-seeds-5 (009 offset table lacks +6)",
+   "disposition": "amendment C30"
+  },
+  {
+   "finding_id": "MISSED-seeds-6 (positive: synthetic streams clean)",
+   "disposition": "no action (positive evidence)"
+  },
+  {
+   "finding_id": "CONSISTENT (all six lenses)",
+   "disposition": "no action: confirmed consistencies (paths under 05_Benchmark_Results/v2/, PR constants, seed formula, recorded approvals in 009/010/011/012, governing-arm file committed, code facts) need no amendment"
+  }
+ ]
+}

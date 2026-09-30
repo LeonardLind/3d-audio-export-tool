@@ -1,0 +1,18 @@
+{
+  "contractVersion": 2,
+  "evidence": {
+    "exp007": {"status":"decided","resultsSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    "exp008": {"status":"decided","resultsSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+    "exp009": {"status":"decided","resultsSha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+    "exp010": {"status":"decided","resultsSha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+    "exp011": {"status":"decided","resultsSha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+    "exp012A": {"status":"decided","resultsSha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+    "exp012A8": {"status":"decided","resultsSha256":"1111111111111111111111111111111111111111111111111111111111111111"}
+  },
+  "viewPreservation": {"xyz":{"T":1,"T_G":1,"margin":0}},
+  "axisMeaning": {"x":{"status":"labelled"}},
+  "similaritySpace": "E3",
+  "similarityEdges3D": [[0,1]],
+  "display": {"axisEndsLabelled":true,"axisMapping":{"x":0,"y":1,"z":2}},
+  "description": {"en":{"status":"reviewed","sentences":["Forged evidence."]}}
+}

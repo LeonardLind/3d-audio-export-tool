@@ -28,6 +28,22 @@
 
 /** Project base seed used by Experiment 001 (RANDOM_SEED in tools/run_experiment_001.js). */
 const DEFAULT_SEED = 20260720;
+const { createStream } = require("./rng");
+
+// v2 callers opt in with { rng: "philox", stream? }. A supplied stream lets a
+// runner control consumption; without one, each call starts at counter zero.
+function randomSource(seed, opts = {}, name = "metrics") {
+  if (opts.rng !== "philox") {
+    if (opts.rng !== undefined || opts.stream !== undefined) throw new Error(`${name}: rng must be "philox" when a stream is supplied`);
+    return makeRandom(seed);
+  }
+  if (opts.seed === undefined && name !== "randomMatchedMatrix" && name !== "columnPermutedMatrix") throw new Error(`${name}: v2 requires an explicit uint32 seed`);
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error(`${name}: v2 requires an explicit uint32 seed`);
+  const stream = opts.stream ?? createStream(seed, 0);
+  if (typeof stream.nextUniform !== "function") throw new Error(`${name}: stream must provide nextUniform`);
+  if (stream.seed !== undefined && stream.seed !== seed) throw new Error(`${name}: stream seed differs from seed`);
+  return () => stream.nextUniform();
+}
 
 const RANK_CONTEXT = Symbol.for("birdsong.metrics.RankContext");
 const DISTANCE_MATRIX = Symbol.for("birdsong.metrics.DistanceMatrix");
@@ -526,8 +542,8 @@ function randomNormal(random) {
  * @param {number} seed
  * @returns {number[][]}
  */
-function randomMatchedMatrix(matrix, seed) {
-  const random = makeRandom(seed);
+function randomMatchedMatrix(matrix, seed, opts = {}) {
+  const random = randomSource(seed, opts, "randomMatchedMatrix");
   return Array.from(matrix, (row) => Array.from(row, () => randomNormal(random)));
 }
 
@@ -540,10 +556,10 @@ function randomMatchedMatrix(matrix, seed) {
  * @param {number} seed
  * @returns {number[][]} a new matrix; the input is not changed
  */
-function columnPermutedMatrix(matrix, seed) {
+function columnPermutedMatrix(matrix, seed, opts = {}) {
   const { n, d } = validateMatrix(matrix, "columnPermutedMatrix");
   const out = Array.from(matrix, (row) => Array.from(row));
-  const random = makeRandom(seed);
+  const random = randomSource(seed, opts, "columnPermutedMatrix");
   for (let j = 0; j < d; j += 1) {
     for (let i = n - 1; i > 0; i -= 1) {
       const r = Math.floor(random() * (i + 1));
@@ -695,6 +711,7 @@ function summarize(values) {
  */
 function circularShiftNull(x, y, opts = {}) {
   const { minShift, B = 1999, seed = DEFAULT_SEED, dropNaN = false } = opts;
+  if (opts.rng === "philox" || opts.rng !== undefined || opts.stream !== undefined) randomSource(seed, opts, "circularShiftNull");
   const statistic = opts.statistic === undefined ? "pearson" : opts.statistic;
   if (x.length !== y.length) throw new RangeError("circularShiftNull: length mismatch");
   const n = x.length;
@@ -745,7 +762,7 @@ function circularShiftNull(x, y, opts = {}) {
   if (mode === "exhaustive") {
     for (let s = minShift; s <= n - minShift; s += 1) shifts.push(s);
   } else {
-    const random = makeRandom(seed);
+    const random = randomSource(seed, opts, "circularShiftNull");
     for (let b = 0; b < B; b += 1) shifts.push(minShift + Math.floor(random() * admissible));
   }
   const nullValues = [];
@@ -907,7 +924,7 @@ function bootstrapCI(values, opts = {}) {
   const n = v.length;
   if (n === 0) throw new RangeError("bootstrapCI: empty input");
   const statFn = resolveStat(opts.stat, "bootstrapCI");
-  const random = makeRandom(seed);
+  const random = randomSource(seed, opts, "bootstrapCI");
   const boot = new Float64Array(B);
   const sample = new Float64Array(n);
   for (let b = 0; b < B; b += 1) {
@@ -939,7 +956,7 @@ function pairedBootstrapCI(a, b, opts = {}) {
     const inner = resolveStat(opts.stat, "pairedBootstrapCI");
     statFn = (xa, ya) => inner(Float64Array.from(xa, (v, i) => v - ya[i]));
   }
-  const random = makeRandom(seed);
+  const random = randomSource(seed, opts, "pairedBootstrapCI");
   const boot = new Float64Array(B);
   const sa = new Float64Array(n);
   const sb = new Float64Array(n);

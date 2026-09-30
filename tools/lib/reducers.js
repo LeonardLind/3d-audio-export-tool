@@ -29,6 +29,7 @@
 //   * A seeded Gaussian random projection is available as a structure-free baseline.
 
 const { UMAP } = require("umap-js");
+const { createStream } = require("./rng");
 
 const SUPPORTED_REDUCERS = ["pca", "umap", "tsne", "random-projection"];
 const PCA_VARIANCE_TARGET = 0.95;
@@ -111,6 +112,19 @@ function randomNormal(random) {
   const u1 = Math.max(random(), 1e-12);
   const u2 = random();
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function reducerRandom(settings, name) {
+  if (settings.rng !== "philox") {
+    if (settings.rng !== undefined || settings.stream !== undefined) throw new Error(`${name}: rng must be "philox" when a stream is supplied`);
+    return { uniform: makeRandom(settings.seed ?? 0), label: "32-bit LCG makeRandom(seed)" };
+  }
+  const seed = settings.seed;
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error(`${name}: v2 requires an explicit uint32 seed`);
+  const stream = settings.stream ?? createStream(seed, 0);
+  if (typeof stream.nextUniform !== "function") throw new Error(`${name}: stream must provide nextUniform`);
+  if (stream.seed !== undefined && stream.seed !== seed) throw new Error(`${name}: stream seed differs from seed`);
+  return { uniform: () => stream.nextUniform(), label: "Philox4x32-10" };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -333,6 +347,7 @@ function reducePca(matrix, settings = {}) {
 // Experiment 002/004 settings, kept so old runs stay reproducible; umap-js's own default
 // nNeighbors is 15.
 function reduceUmap(matrix, settings = {}) {
+  const source = reducerRandom(settings, "reduceUmap");
   const seed = settings.seed ?? 0;
   const nNeighbors = settings.nNeighbors ?? 5;
   const minDist = settings.minDist ?? 0.1;
@@ -342,7 +357,7 @@ function reduceUmap(matrix, settings = {}) {
     nNeighbors,
     minDist,
     spread,
-    random: makeRandom(seed),
+    random: source.uniform,
   };
   if (settings.nEpochs !== undefined) params.nEpochs = settings.nEpochs;
   const umap = new UMAP(params);
@@ -358,7 +373,7 @@ function reduceUmap(matrix, settings = {}) {
       spread,
       nEpochs: umap.getNEpochs(),
       seed,
-      random: "32-bit LCG makeRandom(seed)",
+      random: source.label,
       input: "column-standardised (population std)",
     },
   };
@@ -551,7 +566,14 @@ function tsneCostGradient(Y, P, n, dim, dof, exaggeration = 1, grad = new Float6
 }
 
 function reduceTsne(matrix, settings = {}) {
-  if ((settings.engine ?? "exact") === "tsne-js") return reduceTsneJsLegacy(matrix, settings);
+  if ((settings.engine ?? "exact") === "tsne-js") {
+    if (settings.rng !== undefined || settings.stream !== undefined) throw new Error("reduceTsne: tsne-js is legacy-only");
+    return reduceTsneJsLegacy(matrix, settings);
+  }
+
+  const source = settings.rng !== undefined || settings.stream !== undefined
+    ? reducerRandom(settings, "reduceTsne")
+    : null;
 
   const dim = settings.dimensions ?? 3;
   const seed = settings.seed ?? 0;
@@ -587,7 +609,7 @@ function reduceTsne(matrix, settings = {}) {
     const sd = Math.sqrt(Math.max(s2 / n - (s / n) ** 2, 0)) || 1;
     for (let i = 0; i < n; i += 1) for (let k = 0; k < dim; k += 1) Y[i * dim + k] = (scores[i][k] / sd) * 1e-4;
   } else if (init === "random") {
-    const random = makeRandom(seed);
+    const random = source ? source.uniform : makeRandom(seed);
     for (let k = 0; k < Y.length; k += 1) Y[k] = randomNormal(random) * 1e-4;
   } else {
     throw new Error(`Unsupported t-SNE init "${init}" (use "pca" or "random")`);
@@ -701,10 +723,11 @@ function reduceTsneJsLegacy(matrix, settings = {}) {
 // Box-Muller, filled column by column. A structure-free linear map: a floor any learned
 // reducer should beat on real data.
 function reduceRandomProjection(matrix, settings = {}) {
+  const source = reducerRandom(settings, "reduceRandomProjection");
   const dim = settings.dimensions ?? 3;
   const seed = settings.seed ?? 0;
   const { x, rows: n, cols } = standardizeFlat(matrix);
-  const random = makeRandom(seed);
+  const random = source.uniform;
   const scale = 1 / Math.sqrt(dim);
   const R = new Float64Array(cols * dim);
   for (let c = 0; c < dim; c += 1) for (let k = 0; k < cols; k += 1) R[k * dim + c] = randomNormal(random) * scale;
@@ -723,7 +746,9 @@ function reduceRandomProjection(matrix, settings = {}) {
     details: {
       dimensions: dim,
       seed,
-      distribution: "N(0, 1/dimensions), 32-bit LCG + Box-Muller",
+      distribution: settings.rng === "philox"
+        ? "N(0, 1/dimensions), Philox4x32-10 + Box-Muller"
+        : "N(0, 1/dimensions), 32-bit LCG + Box-Muller",
       input: "column-standardised (population std)",
     },
   };
@@ -742,10 +767,17 @@ function reduceFeatures(matrix, config = {}) {
   }
 
   const dimensions = config.dimensions ?? 3;
+  const methodConfig = config[method] ?? {};
+  if (config.rng !== undefined && methodConfig.rng !== undefined && methodConfig.rng !== config.rng) throw new Error("reduceFeatures: conflicting namespaced rng");
+  if (config.rng === "philox" || methodConfig.rng === "philox") {
+    if (method !== "pca" && (!Number.isInteger(config.seed) || config.seed < 0 || config.seed > 0xffffffff)) throw new Error("reduceFeatures: v2 requires an explicit uint32 seed");
+    for (const key of ["seed", "dimensions"]) {
+      if (methodConfig[key] !== undefined && methodConfig[key] !== config[key]) throw new Error(`reduceFeatures: conflicting namespaced ${key}`);
+    }
+  }
   const topLevel = { ...config };
   for (const key of ["method", "dimensions", "seed", ...SUPPORTED_REDUCERS]) delete topLevel[key];
-  const methodConfig = config[method] ?? {};
-  const settings = { ...topLevel, ...methodConfig, dimensions, seed: config.seed ?? 0 };
+  const settings = { ...topLevel, ...methodConfig, dimensions, seed: method === "pca" ? config.seed : config.seed ?? 0 };
 
   switch (method) {
     case "pca":

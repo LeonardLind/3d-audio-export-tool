@@ -1,158 +1,99 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { ParticleField } from "./components/ParticleField";
-import { AudioPlayer } from "./components/AudioPlayer";
-import { CentroidLegend } from "./components/CentroidLegend";
-import { AudioSourceSwitch } from "./components/AudioSourceSwitch";
-import { SpectralDescriptorsPanel } from "./components/SpectralDescriptorsPanel";
-import { CentroidAmplitudePanel } from "./components/CentroidAmplitudePanel";
-import { SpectrogramPanel } from "./components/SpectrogramPanel";
-import { ChromagramPanel } from "./components/ChromagramPanel";
-import { SandboxGallery } from "./sandbox/SandboxGallery";
-import { BehaviorMode } from "./behavior/BehaviorMode";
-import { CloudSceneV2 } from "./scene2/CloudSceneV2";
-import { UploadMode } from "./upload/UploadMode";
-import type { DatasetManifestEntry, RecordingPayload } from "./types";
-import { displayMaxHz } from "./frequencyRange";
-import "./App.css";
+import { Suspense, useEffect, useState } from 'react';
+import { ResourcesProvider } from './state/ResourcesContext.tsx';
+import { useResources } from './state/useResources.ts';
+import { useAppState, dispatch } from './state/store.ts';
+import { CloudCanvas } from './cloud/CloudCanvas.tsx';
+import { HeaderCard } from './ui/HeaderCard.tsx';
+import { ViewBar } from './ui/ViewBar.tsx';
+import { Legend } from './ui/Legend.tsx';
+import { Tooltip } from './ui/Tooltip.tsx';
+import { TransportBar } from './ui/TransportBar.tsx';
+import { CenterState } from './ui/CenterState.tsx';
+import { MoreMenu } from './ui/MoreMenu.tsx';
+import { DetailsPanel } from './ui/DetailsPanel.tsx';
+import { CompareTray } from './compare/CompareTray.tsx';
+import { UploadPanel } from './upload/UploadPanel.tsx';
+import { loadOwnerPanel } from './devHook.ts';
+import { useDatasets } from './data/useDatasets.ts';
+import { useClip } from './audio/useClip.ts';
+import { stopPlayback } from './audio/engine.ts';
+import { useGates } from './evidence/useGates.ts';
+import type { PreviewData } from './evidence/types.ts';
+import { certifiedSpan } from './data/pointSpan.ts';
+import { useKeyboard } from './ui/useKeyboard.ts';
+import styles from './App.module.css';
 
-type Mode = "scene" | "scene2" | "sandbox" | "behavior" | "upload";
+const OwnerPanel = loadOwnerPanel;
 
-function App() {
-  const [datasets, setDatasets] = useState<DatasetManifestEntry[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [data, setData] = useState<RecordingPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [mode, setMode] = useState<Mode>("scene");
-  // Owned here, shared with the audio element, the particle field, and the panels so they
-  // all read playback time directly (60fps) instead of via slow React state.
-  const audioRef = useRef<HTMLAudioElement>(null);
+function Viewer() {
+  const { audioRef, engineRef } = useResources();
+  const active = useAppState((state) => state.active);
+  const selection = useAppState((state) => state.selection);
+  const axes = useAppState((state) => state.view.axes);
+  const preview = useAppState((state) => state.dev.preview);
+  const datasets = useDatasets();
+  const recording = active.status === 'ready' ? active.recording : null;
+  const clipStatus = useClip(recording);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const currentPreview = preview && previewData?.key === recording?.key ? previewData : null;
+  const gates = useGates(recording, clipStatus, axes, preview, currentPreview?.spans);
+  const audioGate = gates.momentPlayback;
+  const allowUpload = recording?.origin === 'upload' && audioGate.status !== 'hidden';
+  useKeyboard({ recording, audioRef, allowUpload });
+  const spanFor = (index: number | null) => {
+    if (index === null || !recording || audioGate.status === 'hidden') return undefined;
+    return audioGate.status === 'preview' ? currentPreview?.spans[index]
+      : certifiedSpan(recording.points[index], recording.durationSeconds) ?? undefined;
+  };
 
-  // Discover every exported dataset (Audio Source Switch). Each export script upserts
-  // itself into this manifest via tools/lib/manifest.js -- sample audio, real field
-  // recordings, diagnostics all show up automatically, no hardcoded paths here.
   useEffect(() => {
-    fetch("/data/manifest.json")
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`manifest: ${response.status}`))))
-      .then((entries: DatasetManifestEntry[]) => {
-        setDatasets(entries);
-        const requested = new URLSearchParams(window.location.search).get("dataset");
-        const preferred = entries.find((e) => e.id === requested) ?? entries.find((e) => e.id === "sample") ?? entries[0];
-        if (preferred) setActiveId(preferred.id);
-      })
-      .catch((err: Error) => setError(err.message));
-  }, []);
+    engineRef.current?.stop();
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.currentTime = 0;
+  }, [recording?.key, audioRef, engineRef]);
 
   useEffect(() => {
-    const entry = datasets.find((d) => d.id === activeId);
-    if (!entry) return;
-    setCurrentTime(0);
-    fetch(entry.path)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Failed to load dataset: ${response.status}`);
-        return response.json();
-      })
-      .then((payload: RecordingPayload) => setData(payload))
-      .catch((err: Error) => setError(err.message));
-  }, [activeId, datasets]);
+    if (recording?.origin === 'upload' && !allowUpload) audioRef.current?.pause();
+  }, [recording?.origin, allowUpload, audioRef]);
 
-  // The 3D view reveals points itself (in-shader, by emissionTime), so it doesn't need
-  // this. The Centroid-Amplitude scatter still reveals progressively via currentTime.
-  const visiblePoints = useMemo(
-    () => (data ? data.points.filter((point) => point.emissionTime <= currentTime) : []),
-    [data, currentTime],
-  );
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const playing = () => { stopPlayback(); dispatch({ type: 'MAIN_PLAYING' }); };
+    const paused = () => dispatch({ type: 'MAIN_PAUSED' });
+    const ended = () => dispatch({ type: 'MAIN_ENDED' });
+    const seeked = () => dispatch({ type: 'MAIN_SEEK' });
+    audio.addEventListener('play', playing);
+    audio.addEventListener('pause', paused);
+    audio.addEventListener('ended', ended);
+    audio.addEventListener('seeked', seeked);
+    return () => {
+      audio.removeEventListener('play', playing); audio.removeEventListener('pause', paused);
+      audio.removeEventListener('ended', ended); audio.removeEventListener('seeked', seeked);
+    };
+  }, [audioRef, engineRef]);
 
-  const scatterDomain = useMemo(() => ({ centroidMaxHz: data?.centroidMaxHz ?? 1 }), [data]);
-
-  return (
-    <div className="viewer">
-      <div className="overlay">
-        {/* Behavior mode has its own header + per-recording audio, and Upload brings its
-            own file + player, so the single-recording title/player/legend are hidden in
-            both -- only the mode toggle stays. */}
-        {mode !== "behavior" && mode !== "upload" && (
-          <>
-            <h1>Bird Song Acoustic Manifold</h1>
-            <p>
-              {data
-                ? `${data.audioId} — ${data.pointCount} points · ${Math.round(data.sampleRate / 1000)}kHz / ${data.fftSize}-FFT · ${data.durationSeconds.toFixed(0)}s`
-                : error
-                  ? error
-                  : "Loading dataset…"}
-            </p>
-            {data && <AudioPlayer key={data.audioId} src={data.audioUrl} audioRef={audioRef} onTimeChange={setCurrentTime} />}
-          </>
-        )}
-        {data && (mode === "scene" || mode === "scene2") && <CentroidLegend maxHz={data.centroidMaxHz} />}
-        {data && mode === "scene" && (
-          <div className="overlay-panels">
-            <CentroidAmplitudePanel points={visiblePoints} domain={scatterDomain} total={data.pointCount} />
-            <SpectrogramPanel panels={data.panels} audioRef={audioRef} maxHz={displayMaxHz(data)} />
-            <ChromagramPanel panels={data.panels} audioRef={audioRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Top-center nav: audio source switch + mode toggle, always reachable regardless of mode. */}
-      <div className="top-nav">
-        {mode !== "behavior" && mode !== "upload" && (
-          <AudioSourceSwitch datasets={datasets} activeId={activeId} onChange={setActiveId} />
-        )}
-        <div className="mode-toggle">
-          {/* "Sample 2" is the same dataset through the v2 renderer, kept as its own tab so
-              the original 3D Scene stays available side by side for comparison. */}
-          <button className={mode === "scene" ? "active" : ""} disabled={!data} onClick={() => setMode("scene")}>
-            3D Scene
-          </button>
-          <button className={mode === "scene2" ? "active" : ""} disabled={!data} onClick={() => setMode("scene2")}>
-            Sample 2
-          </button>
-          <button className={mode === "sandbox" ? "active" : ""} disabled={!data} onClick={() => setMode("sandbox")}>
-            Sandbox
-          </button>
-          <button className={mode === "behavior" ? "active" : ""} onClick={() => setMode("behavior")}>
-            Behavior
-          </button>
-          {/* Analyzes a file the offline generator has never seen, in this tab. */}
-          <button className={mode === "upload" ? "active" : ""} onClick={() => setMode("upload")}>
-            Upload
-          </button>
-        </div>
-      </div>
-
-      {data && mode === "scene" && (
-        <>
-          <Canvas key={data.audioId} camera={{ position: [8, 5, 9], fov: 52 }} dpr={[1, 2]}>
-            <color attach="background" args={["#04050a"]} />
-            <ParticleField payload={data} audioRef={audioRef} />
-            <OrbitControls enableDamping dampingFactor={0.08} autoRotate autoRotateSpeed={0.5} enablePan={false} />
-          </Canvas>
-
-          <div className="side-panels">
-            <SpectralDescriptorsPanel panels={data.panels} baseline={data.spectralDescriptors} audioRef={audioRef} />
-          </div>
-
-          <div className="multiscale">
-            <div className="multiscale-title">MULTI-SCALE ANALYSIS</div>
-            <div className="species-caption">{data.commonName}</div>
-          </div>
-        </>
-      )}
-
-      {data && mode === "scene2" && (
-        <CloudSceneV2 payload={data} audioRef={audioRef} sceneKey={data.audioId} caption={data.commonName} />
-      )}
-
-      {data && mode === "sandbox" && <SandboxGallery payload={data} audioRef={audioRef} />}
-
-      {mode === "behavior" && <BehaviorMode />}
-
-      {mode === "upload" && <UploadMode />}
-    </div>
-  );
+  return <main className={styles.viewer}>
+    <audio ref={audioRef} className={styles.hiddenAudio} src={recording?.audioUrl ?? undefined} preload="metadata" />
+    {recording && <CloudCanvas key={recording.key} recording={recording} audioRef={audioRef}
+      showEdges={gates.similarityLines.status !== 'hidden'} preview={gates.similarityLines.status === 'preview'} />}
+    <div className={styles.header}><HeaderCard recording={recording} onDataset={(entry) => { void datasets.loadRecording(entry); }} /></div>
+    <div className={styles.views}><ViewBar /></div>
+    <div className={styles.tools}><MoreMenu captureNotice={currentPreview?.notice} /></div>
+    <div className={styles.key}><Legend recording={recording} /></div>
+    <div className={styles.details}><DetailsPanel recording={recording} /></div>
+    <div className={styles.compare}><CompareTray recording={recording} selection={selection} clipStatus={clipStatus}
+      audioGate={audioGate.status === 'hidden' ? undefined : audioGate.value}
+      playbackSpans={{ a: spanFor(selection.a), b: spanFor(selection.b) }}
+      previewNotice={audioGate.status === 'preview' ? currentPreview?.notice : undefined}
+      linkedGate={gates.linkedMoments.status === 'hidden' ? undefined : gates.linkedMoments.value} /></div>
+    <div className={styles.transport}><TransportBar recording={recording} audioRef={audioRef}
+      allowUpload={allowUpload} allowWaveform={audioGate.status !== 'hidden'} /></div>
+    <CenterState active={active} />
+    <Tooltip recording={recording} />
+    <UploadPanel />
+    {OwnerPanel && <Suspense fallback={null}><OwnerPanel recording={recording} gates={gates} onPreviewData={setPreviewData} /></Suspense>}
+  </main>;
 }
 
-export default App;
+export default function App() { return <ResourcesProvider><Viewer /></ResourcesProvider>; }

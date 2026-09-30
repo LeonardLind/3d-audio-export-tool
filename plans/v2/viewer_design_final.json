@@ -1,0 +1,436 @@
+{
+ "angle": "Visual output first, safe by construction. Base: Design 3 (the owner's current priority is how the data looks). Grafts from the other two:\n\nFrom Design 1:\n- a verified-evidence list checked by sha256, plus an OpenGate brand type;\n- copy entries that record their basis, and word-for-word notebook checks;\n- a forged v2 test file that must keep every gate closed;\n- devHook.ts as the only guarded import of dev code;\n- a scan of the built files.\n\nFrom Design 2:\n- frozen shared code is never touched: app/src/analysis/**, app/src/types.ts, tools/**;\n- the Upload listening evidence is an exact-RMS construction test on the real pipeline;\n- no invented in-between frames.\n\nCorrections to all three designs:\n- 'Keeps X%' follows Exp 011 C25: ev[A] is computed from the payload's pcaExplainedVarianceRatio with Exp 011's own addition and rounding rules. It shows only while Exp 008's viewPreservation values for that view are shown (G2a.4). It is never shown for a payload without accepted evidence, such as an Upload.\n- The Exp 008 block key is viewPreservation, with a swappable parser.\n- The Exp 012 caveat is the C05 template, with V filled from the accepted build record.\n- Lines follow C23: E3 lines only in the XYZ view, worded 'closest in this 3D projection'; any other space stays hidden until an owner-approved wording exists.\n- Evidence statuses follow C24: only 'decided' opens a gate.\n\nWhat ships to visitors now (all evidence-independent):\n- the canonical v0.7 Matte cloud with up to 40 crisp peak-frequency numbers that never overlap;\n- a colour key that matches the drawn dots;\n- the whole cloud shown at rest;\n- X/Y/Z chips for exact 1D/2D/3D views with one scale;\n- real-angle camera transitions;\n- hover values, two-dot compare with values side by side;\n- a transport with a full-clip waveform and a red playhead;\n- Upload into the same scene, and the exports.\n\nGated features are absent for visitors. In dev builds the owner can preview them, marked UNVERIFIED, including compare audio with a detailed waveform and a red playhead. The Exp 011 description text comes last.",
+ "file_tree": "All paths are under app/. Status: NEW, REWRITE, or UNCHANGED (frozen).\n\nCONFIG AND SCRIPTS\npackage.json: add scripts test = node --test \"test/**/*.test.ts\"; prebuild = npm test; build = tsc -b && vite build && node scripts/check-dist.mjs. No new dependencies.\ntsconfig.json: add a reference to ./tsconfig.test.json.\ntsconfig.test.json: types node; lib ES2023 without DOM, so the pure modules the tests import cannot use browser APIs; module esnext; moduleResolution bundler; allowImportingTsExtensions; verbatimModuleSyntax; erasableSyntaxOnly; noUnused*; noEmit; skipLibCheck; include test.\nscripts/distLeaks.mjs: pure findLeaks(files) that detects the dev sentinel __OWNER_PREVIEW__, the words UNVERIFIED / Owner preview / uncertified, and chunk names containing OwnerPanel or /dev/.\nscripts/check-dist.mjs: runs findLeaks over dist/ and exits 1 on any hit.\n\nTESTS\ntest/fixtures/payloads.ts: synthetic builders fullExport, appProfile, browserUploadPartial, cloudViewWrapper, v3Payload.\ntest/fixtures/forged_v2.json: contractVersion 2, every v2 block present, every evidence status 'decided' with fake sha256 values.\ntest/fixtures/accepted_simulated.ts: fake accepted records whose sha values match the forged file. Used only by tests and the dev simulated-evidence view.\ntest/**/*.test.ts: see tests.\n\nAPP SHELL\nsrc/main.tsx: UNCHANGED.\nsrc/index.css: REWRITE. Dark design tokens as CSS variables, base type, focus ring.\nsrc/App.tsx: REWRITE. One screen: the hidden audio clock, providers, CloudCanvas and the overlay slots. The only dev hook is `const OwnerPanel = loadOwnerPanel` from devHook.ts.\nsrc/App.module.css: overlay layout. Replaces App.css.\nsrc/devHook.ts: the only file allowed to reference src/dev: `export const loadOwnerPanel = import.meta.env.DEV ? lazy(() => import('./dev/OwnerPanel.tsx')) : null`.\nsrc/types.ts: UNCHANGED. It is in frozen pipeline.ts's import graph. Legacy types are trimmed after the freeze.\nsrc/analysis/{pipeline,pca,fft,decodeAudio,analyzeWorker}.ts: UNCHANGED (parity-verified, frozen).\n\nsrc/state/\ntypes.ts: AppState, Action, AxisMask (1..7), Selection, RevealMode.\nreducer.ts: pure; every transition and invariant.\nselection.ts: pure applyClick.\nstore.ts: small external store (useSyncExternalStore) with selectors and dispatch.\nResourcesContext.tsx: audioRef, engine and startUpload.\n\nsrc/data/\ntypes.ts: CloudPoint (= RecordingPointDatum plus optional audioStartSeconds/audioEndSeconds), CloudRecording, SourceInfo, FrequencyRange, DatasetManifestEntry, NormalizeResult, V2Raw (future blocks typed unknown).\nnormalize.ts: pure toCloudRecording(raw, {key, origin}).\nmanifest.ts: fetchManifest, pure pickInitialDataset, fetchPublished.\nuseDatasets.ts: loads the manifest and the active recording into the store.\npointSpan.ts: pure certifiedSpan and toSampleRange.\n\nsrc/evidence/\ntypes.ts: FeatureId, GateState, GateReason, GateEnv, AcceptedRecord (typed summaries for exp007-012), ApprovedCopy, OpenGate<T> (brand declared with a declare-only unique symbol).\naccepted.ts: ACCEPTED_EVIDENCE (all null) and APPROVED_COPY (all false). Only an owner-approved commit changes it.\nblocks.ts: swappable, fail-closed parsers for evidence.exp0NN, viewPreservation, axisMeaning, similaritySpace/k/gap/similarityEdges3D, per-point spans plus decoder provenance, display, description.\ngates.ts: pure evaluateGates(input), returning Record<FeatureId, GateState>. The only place that creates OpenGate.\nevRule.ts: pure Exp 011 ev[A]. Doubles added left to right in x, y, z order, then a decimal shift of the shortest round-trip string, then Exp 011 rounding, with the 'under 1%' variant.\nuseGates.ts: memoised evaluateGates from the store and the clip status.\n\nsrc/format/number.ts: pure Exp 011 decimal-string rounding (half away from zero), formatKHz, formatLabelK, formatSeconds, formatClock, formatPercent, formatDbfs.\n\nsrc/copy/\ndefine.ts: CopyEntry {id, en, basis: control | status | definition{path} | verbatim{notebook, line} | gated{feature}} and t().\ngated.ts: pre-committed texts: the Exp 008 labels, the Exp 010 fixed statements, the Exp 007 'closest in this 3D projection', and the Exp 012 C05 caveat template.\nui.ts, cloud.ts, compare.ts, upload.ts: visitor strings, one file per owning package.\n\nsrc/cloud/\ntypes.ts: ViewBasis, ScreenFrame, LabelBox.\nconstants.ts: Matte numbers copied exactly from v0.7, and LABEL_COUNT 40.\nchannels.ts: pure radiusFraction, labelCandidates, labelText.\ncolorRamp.ts: pure plasma stops, srgbToLinear, plasmaLinear, restingDotDisplayRgb, legibleEdgeLinear.\ngeometry.ts: pure toggleAxis, viewBasis, projectToView, fitOrtho, equivalentOrthoDepth, ballRadiusCss, labelBox, placeLabels, pickPoint, drawOrderByDepth, drawOrderBySize, gridLines, currentPointIndex.\ntransition.ts: pure rigid-rotation or cross-fade plan, and easing.\nrevealClock.ts: pure revealTime and ageFactors (the shader's reveal, recent and pulse values).\nmatteShader.ts: GLSL. v0.7 vertex law and matteFragment exactly, plus uAxisMask, uOrthoDepth, uFade, and a per-frame uPixelRatio. Trail, edge and line shaders.\nCloudCanvas.tsx: the Canvas, keyed per recording; pointer handling dispatches hover and click.\nCloudPoints.tsx: Points plus the Matte material; the draw-order index buffer is updated each frame.\nTrailLine.tsx: the time-ordered trail.\nEdgeLines.tsx: similarity lines; mounted only when the gate is shown or preview. Can highlight one dot's lines.\nCameraRig.tsx: perspective camera plus OrbitControls for 3D; locked orthographic camera for 1D/2D; transitions.\nFlatGrid.tsx: square grid in 1D/2D.\nAxisGizmo.tsx: grey X/Y/Z triad in 3D.\nscreenFrame.ts: per-frame screen cache and pickAt.\nScreenLayer.tsx: overlay canvas with labels, hover/A/B/now rings and the ± end marks.\ncapture.ts: PNG composite of the WebGL frame and the overlay.\nCloud.module.css\n\nsrc/audio/\ntypes.ts: DecodedClip, ClipStatus, AudioOrigin, PlayHandle.\norigin.ts: pure classifyPlaybackSource and formatGroup.\noverview.ts: pure overviewColumns.\nselfCheck.ts: pure verifyAnalysisSpans.\ndecodeClip.ts: fetch, then OfflineAudioContext at the source rate R_s (with the webkit fallback), then decodeAudioData.\nclipStore.ts: clips keyed by recording key; Upload PCM stored under up:<runId>.\nuseClip.ts: the current recording's clip status.\nengine.ts: realtime AudioContext; exact [A,B) playback; loop; A-then-B; heardTime; exclusive with the audio element.\n\nsrc/compare/\ntypes.ts\nmeasuredRows.ts: pure rows of measured values.\nwaveformMath.ts: pure sliceMinMax, sharedPeak, playheadFraction.\nCompareTray.tsx\nSlotCard.tsx\nMomentWaveform.tsx\nCompare.module.css\n\nsrc/ui/\nHeaderCard.tsx, DatasetMenu.tsx, ViewBar.tsx, ViewQualityLine.tsx (gated), AxisCaptions.tsx (gated), AxisLoadings.tsx (gated), Legend.tsx, Tooltip.tsx, TransportBar.tsx, CenterState.tsx, HelpPopover.tsx, MoreMenu.tsx, DetailsPanel.tsx (gated description section), useKeyboard.ts, Ui.module.css\n\nsrc/upload/\nuseUploadRun.ts: decodeToAnalysisRate, keep the samples, send the worker a copy, drop stale runs.\nUploadPanel.tsx\nUpload.module.css\n\nsrc/export/\nviewExport.ts: pure birdsong-cloud-view builder.\nuploadExport.ts: pure flat <id>_cloud.json builder.\ndownload.ts: saveJson and savePng.\n\nsrc/dev/ (reached only through devHook.ts)\npreview.ts: PREVIEW_SENTINEL and previewRequested.\ndevSpans.ts: pure, uncertified spans derived from the analysis grid.\ndevCopy.ts\nOwnerPanel.tsx: gate table, preview switch, simulated evidence, diagnostics.\nDev.module.css\n\nREADME.md",
+ "deletions": [
+  "app/src/behavior/ (BehaviorMode, BehaviorOverview, CategoryObject, CompareScene). Their .compare-* CSS names would clash with the new compare/.",
+  "app/src/sandbox/ (all 10 files, including speciesColor.ts)",
+  "app/src/components/ParticleField.tsx: the v0.1 renderer. The deletion stays an uncommitted edit until the owner approves a dated amendment to Technical_Architecture.md, which says renderer versions are only ever added.",
+  "app/src/components/ParticleFieldV2.tsx: its GLSL and label algorithm are first copied exactly into cloud/matteShader.ts, cloud/channels.ts and cloud/geometry.ts.",
+  "app/src/components/cloudStyles.ts: only the v0.7 numbers and matteFragment survive, in cloud/constants.ts and cloud/matteShader.ts. Styles v0.1-v0.6, v0.8, v0.9, the picker, DEFAULT_VERSION and all style notes go; git history is the archive.",
+  "app/src/components/cloudChannels.ts: SIZE_LEAD '0.15 s', the untraced r = 0.29/0.94/0.81 notes, the size modes and the non-dominant label formatters all go. MIN_RADIUS_FRACTION, SIZE_SCALE, the energy branch and the kHz formatter move to cloud/.",
+  "app/src/components/SpectrogramPanel.tsx, ChromagramPanel.tsx, SpectralDescriptorsPanel.tsx, RadarChart.tsx, CentroidAmplitudePanel.tsx, ScatterPlot.tsx, panelBitmap.ts, useCurrentFrame.ts",
+  "app/src/components/CentroidLegend.tsx, AudioPlayer.tsx, AudioSourceSwitch.tsx: replaced by ui/Legend.tsx, the hidden audio element with ui/TransportBar.tsx, and ui/DatasetMenu.tsx.",
+  "app/src/scene2/CloudSceneV2.tsx: removes the two TS errors (TS2339 at :76, TS2352 at :83), the 'sound alike' text, 'MULTI-SCALE ANALYSIS', edges on by default, and the control panel. Its export trimming moves to export/viewExport.ts.",
+  "app/src/upload/UploadMode.tsx: removes the second scene and second audio element, the buffer transfer at :114, the ungated PCA-variance row, the nominal 0.15 s row, the line count, and the '~1% / unchanged' claim.",
+  "app/src/colorScale.ts (the plasma ramp moves to cloud/colorRamp.ts without three; frequencyColor, fluxColor and chromaColor are deleted) and app/src/frequencyRange.ts (it throws on Upload payloads)",
+  "app/src/App.css: replaced by App.module.css. All dead mode, panel, sandbox and behaviour selectors go.",
+  "The blue core glow at the origin and the interpolated comet, both inside ParticleFieldV2. They are replaced by a ring on the most recently started measured dot.",
+  "NOT deleted: app/src/analysis/**, app/src/types.ts (trim after the freeze), tools/**, and app/public/*. The pipeline.ts:129-130 'sound alike' comment and the 'pipeline' string at :359 ('0.15s window') stay because the file is frozen; they are flagged for Phase 4."
+ ],
+ "state_model": "ONE STORE: state/store.ts, an external store read with useSyncExternalStore and selectors. It holds discrete UI state only. Per-frame data never goes into React state.\n\nAppState\n- datasets: {status, entries, error?}\n- active: none | loading{key} | ready{key, recording} | invalid{key, reason} | error{key}. The key is 'pub:<id>:<audioId>' or 'up:<runId>'.\n- upload: {runId, fileName, progress, error, elapsedMs, downmixWarning}\n- view: {axes: AxisMask 1..7, transition: {from, to, plan, startedAt} | null, autoRotate, fitRequest}\n- playback: {main: idle | playing | paused | ended, reveal: all | follow}\n- pointer: {hover: {index, clientX, clientY} | null}\n- selection: {a, b}\n- compare: {playing: a | b | sequence | null, loop, sharedScale: true}\n- ui: {detailsOpen, helpOpen, menuOpen, keyCollapsed, compareHintSeen}\n- dev: {preview}. The store forces this to false when env.build is 'prod'.\n\nInvariants (all in the pure reducer, all tested)\n- The axes are never 0. Turning off the last axis does nothing and shows a hint.\n- A new active key clears selection, hover and compare.playing, sets reveal to 'all' and main to 'idle', and stops slot audio.\n- Selection indices are always below n, and a is never equal to b.\n- applyClick: fills A, then B. Later clicks replace B. Shift-click replaces A. Clicking a selected dot removes it. Esc clears both.\n- Only one source is audible at a time: SLOT_PLAYING pauses main, and main playing stops the slot.\n- Main playing or a seek sets reveal to 'follow'. REVEAL_ALL (the 'Show all' chip) is allowed only while not playing.\n- Any Upload action carrying a stale runId is ignored.\n- The initial axes come from ?view=x|y|z|xy|xz|yz|xyz; anything else gives xyz.\n\nOutside React state\n- The hidden HTMLAudioElement is the only cloud clock. Shaders and ScreenLayer read audio.currentTime inside useFrame. revealTime gives +Infinity when reveal is 'all', which shows the whole cloud and every label candidate with no pulse and no trail.\n- screenFrame: reused Float32Arrays of sx, sy, depth, radiusCss, revealed and drawOrder. Written once per frame by ScreenLayer. Read by labels, pickAt, rings and the tooltip.\n- engine: one lazily created AudioContext and the current PlayHandle.\n- clipStore: Map<recordingKey, {status, origin, buffer, mono, sampleRate}>. Every lookup requires key equality, so one file's audio can never pair with another file's dots.\n- CameraRig owns both cameras and the saved 3D pose.\n\nDerived with useMemo (never stored)\n- gate table: evaluateGates({recording, accepted, approvedCopy, env, view, clipStatus, selfCheck})\n- labelCandidates(points, 40)\n- amplitudeMax\n- colorMaxHz: the maximum over the points, which is production's resolveCentroidColorMaxHz rule\n- the key gradient from restingDotDisplayRgb\n- measuredRows for the hovered dot, A and B",
+ "evidence_gating": "PRINCIPLE\n- The viewer never computes a verdict or threshold.\n- It only computes a number with the exact formula an accepted experiment defines (ev[A] per Exp 011 C25), and it renders only what the evidence allows.\n- One pure function, evaluateGates, decides everything and fails closed. Anything missing, malformed, NaN or an unknown enum value gives 'hidden' with typed reasons.\n- The always-on, evidence-independent list is declared and asserted in a test: cloud, labels, key, axisViews, grid, gizmo, transportWaveform, tooltip, picking, compareValues, upload, downloads.\n\nLOCK 1: THE VIEWER'S ACCEPTANCE LIST (evidence/accepted.ts)\n- ACCEPTED_EVIDENCE = {exp007..exp012A, exp012A8: null}.\n- APPROVED_COPY = {linesWording, linesNonE3Wording, viewQualityTerms, axisCaptions, uploadListening, description: false}.\n- A record is {resultsPath, resultsSha256, decisionId, acceptedOn, verificationRef, summary}. The typed summaries hold:\n  - exp007: per-view labels and whether the edge-wording upgrade is allowed;\n  - exp008: per-view outcome and whether the flag may be shown;\n  - exp009: outcome, space, k, gap;\n  - exp010: outcome;\n  - exp011: templatesSha256;\n  - exp012A: R5 or R6; certified constants {22050, 1024, 512, 6, 3584}; ffmpegBuilds [{versionLine, sha256, platform, arch}] with this PC's 6.1.1 first (decision 5); blocked source sha256 values; excluded format groups;\n  - exp012A8: groups that passed.\n- It changes only through an owner-approved commit, after an independent re-derivation.\n- test/accepted.test.ts checks every non-null record: the file exists under ../05_Benchmark_Results/v2/, its SHA-256 matches, and the notebook's Status line is no longer 'Pre-registered'.\n\nLOCK 2: PER-RECORDING PAYLOAD EVIDENCE (Phase 4, Exp 011 schema)\n- contractVersion must be 2.\n- evidence.exp0NN.status must be exactly 'decided'. Pending, not-run, suspended, provisional, owner-decision-pending, exploratory and missing all fail closed (C24).\n- resultsSha256 must equal the accepted record's.\n- The C14 consistency check must have passed for any gate reading 007, 008 or 012B.\n- The feature's block must parse. Upload payloads carry no evidence, so every gated feature is closed for them, except uploadListening (below).\n\nLOCK 3: APPROVED WORDING\n- Every sentence of a gated feature comes from copy/gated.ts through its OpenGate, and any wording that is not pre-committed also needs its APPROVED_COPY flag.\n- The OpenGate<T> brand is created only in gates.ts, and a guard test checks this. Gated components accept only OpenGate<T>, and @ts-expect-error tests prove that plain data does not compile.\n\nPER-FEATURE CONDITIONS\n- similarityLines:\n  - Needs exp009 accepted with a decision that allows lines, and exp007 accepted.\n  - A v1 payload (no similaritySpace) counts as E3 with k = similarityNeighbors and gap = similarityMinTimeGapSeconds. It must match the accepted space, k and gap.\n  - E3 lines appear only in xyz (C23 G7.4), worded 'closest in this 3D projection', or 'similar spectrogram content (in the analysed feature space)' only if the exp007 upgrade flag is set.\n  - Non-E3 spaces are hidden unless linesNonE3Wording is approved (C23(2)).\n  - Wording is never perceptual.\n- linkedMoments: needs similarityLines shown. Time ticks on the transport strip also need momentPlayback-level timing evidence.\n- viewQuality:\n  - Needs exp008 and exp007 accepted, plus the viewPreservation block with finite T, T_G and margin for the current view, plus viewQualityTerms.\n  - It shows T, T_G and the margin at 2 dp, the exact label for the view, and the weak flag only where allowed.\n  - 'Keeps X%' = evRule(pcaExplainedVarianceRatio, view). It shows only while those view values show (G2a.4) and G2a.1 holds: length 3, each value in [0, 1], and the sum equals pcaExplainedVarianceTotal within 1e-9.\n  - A 'deferred' status shows 'not yet measured' (Exp 008 F2).\n- axisCaptions:\n  - Needs exp010 and exp007 accepted, axisMeaning[a].status 'labelled', display.axisEndsLabelled, the axis toggled on, and axisCaptions approved. That approval is pending, because the current templates break the readability rules.\n  - If the method gates failed, only the fixed Exp 010 statement and the numbers are shown.\n- axisLoadings: needs exp010 accepted and a finite 3 x 24 x 6 grid.\n- description: needs exp011 accepted, description approved, and readabilityStatus[lang] 'reviewed' (plus 'reviewed-fluent' for ES/PT). payload.display must equal cloud/constants. Each sentence's runtime gate must hold. Low priority.\n- momentPlayback (published recordings):\n  - exp012A accepted with R5 or R6.\n  - Every point has finite audioStartSeconds < audioEndSeconds <= durationSeconds.\n  - framesPerPoint, stftHopSize, fftSize and sampleRate equal the certified constants.\n  - The payload's decoder sha256 is in ffmpegBuilds, and its sourceSha256 is not blocked.\n  - origin is 'source-file': basename(audioUrl) === source.filename and browserPlayable.\n  - At runtime: decoded.sampleRate === R_s, and every span fits inside the decoded length.\n  - Production builds also need formatGroup in exp012A8.passed.\n- uploadListening: needs origin 'upload', and verifyAnalysisSpans must pass on every point. Production builds also need uploadListening approved.\n\nWHAT VISITORS SEE WHEN EVIDENCE IS ABSENT\n- Nothing: no element, no placeholder, no 'coming soon', and the layout closes up.\n- Compare cards keep their measured values but show no waveform and no play button.\n- The key has no lines row.\n- No duration such as 0.16 s appears anywhere.\n\nDEV-ONLY OWNER PREVIEW\n- When it exists: import.meta.env.DEV, plus ?preview or the Owner-panel switch.\n- What it can show: only data that exists in the payload (3D edges, in xyz only; raw v2 blocks as data) and grid-derived spans from dev/devSpans.ts:\n  - sf = round(emissionTime * sampleRate / hop), which must be an integer within 1e-9;\n  - the span is [512*sf, 512*sf + 3584) / 22050;\n  - it never uses samplingWindowSeconds or the point id.\n- Marking: every previewed element carries a hatched 'UNVERIFIED · Exp 0NN' chip. The screen gets a hatched frame and a banner.\n- Compare caveats in preview:\n  - before Part A: 'UNVERIFIED: moment timing derived from the analysis grid; Experiment 012 has not run.';\n  - after Part A, before A.8: the C05 template with V filled.\n- Simulated evidence: runs the real gated components on fixture records, watermarked 'SIMULATED EVIDENCE'.\n\nWHY PREVIEW CANNOT REACH PRODUCTION\n1. Dev code lives only in src/dev and is reachable only through devHook.ts's `import.meta.env.DEV ? lazy(import(...)) : null`. Vite replaces DEV with false and emits no chunk. A devIsolation test fails if any other file imports src/dev.\n2. evaluateGates never returns 'preview' when env.build is 'prod' (unit test).\n3. Every dev module embeds __OWNER_PREVIEW__. check-dist fails the build on that sentinel, the dev words, or an OwnerPanel chunk.\n4. prebuild runs every guard test, so npm run build fails on any guard.\n\nSOURCE-TEXT GUARDS\n- claimText scans string literals and JSX text in src (except frozen analysis/) against scripts-level banned patterns:\n  - sound(s) alike / similar / like, similar-sounding, same note, repeats itself;\n  - 0.15 s or 0.15-second;\n  - r = 0.x, few percent, typically, multi-scale, coming soon;\n  - plus the Exp 011 A3 EN denylist, for gated description text only.\n- copyCoverage: no JSX text with letters outside the copy files.\n- notebookVerbatim: every verbatim entry occurs in its notebook, including the C05 caveat template and Exp 007 line 383.\n- gatesClosed: the committed accepted list plus every fixture, forged_v2 included, leaves every gate closed.",
+ "features": [
+  {
+   "name": "Single screen, recording menu, centre states",
+   "gated_by": "none",
+   "design": "LAYOUT\n- Full-bleed canvas, background #04050a.\n- Header card top-left, 16 px inset, 320 px: wordmark, then commonName as the title with a menu arrow, then the subline '{d} s · {n} dots'.\n- View bar top-centre. Top-right: help, more menu, and Owner (dev only).\n- Key bottom-left. Transport along the bottom, 56 px. Compare tray above the transport. Side panels on the right, 320 px.\n- Panel style: rgba(10,11,16,.78) fill, 1 px #232838 border, radius 10.\n\nRECORDING MENU\n- Lists the manifest entries, then 'Analyse a file from this computer…'.\n- ?dataset= picks the recording; otherwise 'sample', otherwise the first entry.\n\nCENTRE STATES\n- Loading.\n- No recordings (in dev, with the generate command).\n- An invalid file, with the exact normalizer reason.\n- A newer version: 'This file uses format version {v}; this viewer reads versions 1 and 2.'\n- Upload progress, using the pipeline's stage names.\n\nNARROW SCREENS (<700 px): the key and the tray collapse into sheets, and there is no horizontal scroll."
+  },
+  {
+   "name": "Canonical v0.7 Matte cloud",
+   "gated_by": "none (constants copied exactly; tested)",
+   "design": "- matteFragment is kept exactly.\n- Matte numbers: haloScale 1, maxBall 200 device px, restColor .95, recentColor .4, restAlpha .95, recentAlpha 0, revealFloor .4, normal blending.\n- Reveal .28 s. Recent .7 s. Pulse 1 + recent*(.6 + 1.3*flux). Size max(.035, amp/ampMax)*62*dpr*9/depth.\n- Colour = plasma(spectralCentroidHz / colorMaxHz).\n- Camera [8,5,9], fov 52, dpr [1,2]. Orbit: damping .08, autoRotate .5, no pan.\n\nFixes\n- The pixel ratio is read from gl.getPixelRatio() every frame.\n- 3D is drawn back to front through a per-frame index buffer (n ≤ 700). Flat views draw the largest dots first.\n- The core glow is removed.\n- The comet is replaced by a 1.5 px white ring on currentPointIndex(t) while playing.\n- There is no style, size or label-value picker."
+  },
+  {
+   "name": "40 peak-frequency numbers",
+   "gated_by": "none (Exp 011 S5 candidate rule kept exactly)",
+   "design": "CANDIDATES: the time-ordered points, stable-sorted by raw amplitude (highest first), first min(40, n). No 0 Hz filter.\n\nTEXT: formatLabelK gives '5.43K' with Exp 011 rounding. A candidate with amplitude <= 0 keeps its slot but draws no text.\n\nDRAWN on the overlay canvas in the canonical glyph style: weight 600 ui-monospace / Cascadia Mono / Consolas, 13 CSS px box, dark round halo rgba(2,4,10,.85), fill #f2f5fb.\n\nPLACEMENT, loudest first, every frame\n- One labelBox() gives both the drawn box and the collision box. It starts 4 px beyond the live pulsed and clamped ball radius from ballRadiusCss.\n- A label is hidden if its dot is not revealed, if it is off-screen or behind the camera, or if it would come within 3 px of a placed box.\n- The same function works for both camera types.\n- Nothing is allocated per frame."
+  },
+  {
+   "name": "Key that matches the dots",
+   "gated_by": "none; the lines row only with the similarityLines gate",
+   "design": "COLOUR ROW\n- Label: 'average frequency (spectral centroid)'.\n- 8 px gradient built from restingDotDisplayRgb(t) = linear plasma * .95 * .95 at alpha .874 over #04050a. This is exactly what the shader writes, since there is no colour-space conversion in the shader.\n- Ticks 0, ¼, ½, ¾ and max, in kHz to 1 dp.\n\nSIZE ROW: 3D and flat views get different construction text.\n\nNUMBERS ROW: 'strongest frequency in kHz, on the {n} dots with the strongest signal. Numbers that would overlap are hidden.'\n\nPLAYBACK ROWS (trail, swell) show only while playing or paused part-way, with the chip 'Showing moments up to {m:ss.s} · Show all'.\n\nCHECKS: a test compares the stops with the formula. A dev pixel readback must match within ±2/255."
+  },
+  {
+   "name": "Rest state and playback reveal",
+   "gated_by": "none",
+   "design": "- At load, before play, after the end, and after 'Show all': uTime = +Infinity. All dots and all label candidates show, with no swell and no trail.\n- Play: the cloud reveals by audio.currentTime, exactly as in v0.7.\n- Pause part-way keeps the partial reveal. Seek moves it.\n- Labels and picking use only revealed dots."
+  },
+  {
+   "name": "X/Y/Z toggles: 1D line, 2D scatter, 3D cloud",
+   "gated_by": "none (meets Exp 008's one-uniform-scale requirement by construction; no per-view numbers)",
+   "design": "CHIPS\n- Three 36 px chips X, Y, Z (aria-pressed; the last active chip is aria-disabled).\n- Readout: '3D view', '2D view · X and Y' or '1D view · X'.\n- Tooltips: 'X: first PCA direction' (likewise for Y and Z).\n- Flat views get a Fit button; 3D gets a turn toggle.\n- Keys X, Y, Z and F. ?view= sets the start view.\n\nDetails are in axis_views."
+  },
+  {
+   "name": "Flat-view grid, ± end marks, 3D gizmo",
+   "gated_by": "none",
+   "design": "- Square grid: step 1, 2 or 5 × 10^k world units, 6-12 lines across, rgba(255,255,255,.06), no numbers.\n- '−X' left, '+X' right, and so on, 11 px #8a93a6. This follows Exp 010's '+X/−X' convention.\n- 3D: a grey, non-interactive drei GizmoHelper triad, never in plasma colours. Red is reserved for 'now playing'."
+  },
+  {
+   "name": "Transport with full-clip waveform and red playhead",
+   "gated_by": "none for the waveform (the file's own decoded samples). Dot-time marks on the strip are gated by Exp 012.",
+   "design": "- Play/pause button, then the clock '0:07.4 / 0:13.7', then a min/max strip from overviewColumns of the decoded mono (played part #9aa3b2, unplayed #5b6477).\n- A 2 px #ff3b30 playhead at audio.currentTime.\n- Click or drag to seek; ← and → step 1 s.\n- Before the decode finishes, and if it fails, the strip is a plain track.\n- The decode is lazy, after first paint, and shared with compare through clipStore.\n- Known residual risk: nothing checks that the audio element's timeline and the decoded timeline line up (for example, MP3 encoder delay). This goes to the owner as a question."
+  },
+  {
+   "name": "Hover tooltip",
+   "gated_by": "none (payload fields with code definitions)",
+   "design": "- Opens after 80 ms on a revealed dot: a ring at radius + 3, and a card at the cursor + 14 px.\n- Rows:\n  - 'Starts at {s.ss} s'\n  - 'Strongest frequency {x.xx} kHz'\n  - 'Average frequency {x.xx} kHz', with a swatch\n  - 'Signal strength {p}% of the strongest', or 'under 1%'\n  - 'Click to compare'\n- Never shown: position numbers, normalised fields, the id, an end time, or 'what you hear'.\n- autoRotate pauses while the pointer is over the canvas."
+  },
+  {
+   "name": "Picking and A/B selection",
+   "gated_by": "none",
+   "design": "- Screen-space pickPoint over the per-frame screenFrame: the topmost revealed disc under the cursor, otherwise the nearest within 6 px. THREE.Points raycasting is not used.\n- A pointer move of 4 px or more counts as a drag, not a click. Picking is disabled during transitions.\n- A ring: #4dd9ff with an 'A' chip. B ring: #7cf29a with a 'B' chip.\n- Selection survives view changes and is cleared when the recording changes."
+  },
+  {
+   "name": "Compare tray: measured values side by side",
+   "gated_by": "none",
+   "design": "- Two cards with the same row order:\n  - Starts at\n  - Strongest frequency\n  - Average frequency\n  - Signal strength (% of strongest)\n  - Level (dB re digital full scale, 1 dp; omitted when amplitude is 0)\n  - Spectral change (% of this recording's range)\n- Silent moment: strongest frequency shows '— (digital silence)'.\n- Footnote: the bin step from frequencyRange.binWidthHz (fallback sampleRate/fftSize), and 'percentages compare moments of this recording only'.\n- No difference column."
+  },
+  {
+   "name": "Hear a moment: detailed waveform and red playhead",
+   "gated_by": "momentPlayback (Exp 012 Part A plus provenance; A.8 per format group in production) or uploadListening; dev preview otherwise",
+   "design": "Each card: an 88 px waveform, Play/Stop, Loop. Across both cards: 'Play A, then B' and 'Same scale for A and B'. Mechanism in compare_mode."
+  },
+  {
+   "name": "Similarity lines",
+   "gated_by": "similarityLines (Exp 009 + Exp 007 + C23 wording; E3 only in xyz)",
+   "design": "- v0.7 styling: endpoint-gradient colours with the .55 floor, opacity .34, depthTest off, renderOrder −1, reveal at the later endpoint with a .5 s fade.\n- Edges are range-checked by the normalizer.\n- Off for visitors today. The dev preview draws E3 lines in xyz only."
+  },
+  {
+   "name": "Show linked moments (replaces 'show repeats')",
+   "gated_by": "similarityLines shown; strip ticks also need the timing gate",
+   "design": "- With one dot selected, the slot card offers 'Show linked moments'. That dot's lines go to full opacity and all others dim to .1.\n- The card lists the partner start times; one click puts a partner into slot B.\n- Never worded 'repeat'."
+  },
+  {
+   "name": "Per-view quality line",
+   "gated_by": "viewQuality (Exp 008 viewPreservation + Exp 007 + approved terms; C25 G2a.4)",
+   "design": "- A 12 px line under the chips: 'Keeps {X}% of the variation' (evRule), then T, the reference T_G and the margin from the block.\n- An outline chip carries the exact payload label and the flag where allowed. A deferred block shows 'not yet measured'.\n- Views are never ranked."
+  },
+  {
+   "name": "Axis captions and loading picture",
+   "gated_by": "axisCaptions (Exp 010 + Exp 007 + owner-approved wording); axisLoadings (Exp 010)",
+   "design": "- One line per active labelled axis, with the mandatory suffix and '+ end / − end' pointing at the drawn marks.\n- 'What each direction is made of' opens a 24 × 6 heatmap per axis. The diverging palette is blue #3b82f6 to orange #f59e0b, symmetric around each axis's max |loading| (never red)."
+  },
+  {
+   "name": "Recording description EN/ES/PT",
+   "gated_by": "description (Exp 011 + human review statuses); LOW priority, built last",
+   "design": "'About this recording' in the Details panel, with a language switch. Only payload sentences whose runtime gates hold and whose language has been reviewed are shown."
+  },
+  {
+   "name": "Upload into the same scene",
+   "gated_by": "none for the cloud; uploadListening for sound",
+   "design": "- useUploadRun:\n  - decodes with decodeToAnalysisRate (unchanged);\n  - keeps `pcm = decoded.samples`;\n  - posts `const copy = pcm.slice()` with [copy.buffer], replacing the transfer of the original;\n  - drops stale runIds;\n  - normalizes the result and stores the PCM under up:<runId>.\n- The 'This file' panel shows only definition facts:\n  - dots kept of windows;\n  - duration and dot spacing (samplingHopSeconds);\n  - analysis rate, FFT size and step;\n  - source rate and channels, or 'not read from the header';\n  - analysed range and band-limit note;\n  - compute time;\n  - 'decoded and resampled by this browser, not ffmpeg';\n  - the downmix warning;\n  - Download analysis (JSON)."
+  },
+  {
+   "name": "Downloads",
+   "gated_by": "none",
+   "design": "- View JSON: {kind:'birdsong-cloud-view', exportedAt, caption, displaySettings:{style:'v0.7-matte', axes, labelValue:'dominantFrequencyHz', labelCount:40}, styleDefinition, cloud}. cloud is the raw payload minus the old heavy fields, with every other field (including v2) passed through, because production reads only cloud.\n- Upload: flat <id>_cloud.json, as today.\n- Save picture: PNG of the WebGL frame and the overlay."
+  },
+  {
+   "name": "Owner panel (dev only)",
+   "gated_by": "import.meta.env.DEV through devHook.ts",
+   "design": "- Evidence table: accepted records and payload statuses.\n- Every gated feature with its state and plain reasons.\n- The preview switch, and simulated evidence.\n- Diagnostics:\n  - decode origin, rate and duration difference;\n  - Upload self-check '{k} of {n} dots match exactly';\n  - dropped edges, and a centroidMaxHz mismatch;\n  - visible-label count and overlap count (must be 0);\n  - key-versus-pixel readback."
+  }
+ ],
+ "compare_mode": "PICKING\n- pickPoint over screenFrame, using the same ballRadiusCss the shader and labels use.\n- The topmost revealed disc wins, otherwise the nearest within 6 px.\n- Clicks: A, then B; later clicks replace B; shift replaces A; clicking a selected dot removes it; Esc clears.\n- autoRotate pauses while the pointer is over the canvas or a slot is filled.\n\nAUDIO SOURCE (always on the main thread; decoded lazily after first paint, cached per recording key)\n- Published recordings:\n  - fetch(audioUrl), then decodeAudioData in new (OfflineAudioContext ?? webkitOfflineAudioContext)({numberOfChannels: source.channels, length: 1, sampleRate: R_s = source.sampleRateHz}). This is the Exp 012 A.8 path.\n  - Keep every channel for playback, and the channel mean for drawing (A.8's x_b).\n  - classifyPlaybackSource: 'source-file' only when basename(decodeURIComponent(audioUrl)) === source.filename and browserPlayable; '_playback.mp3' gives 'transcode'; no source gives 'unknown'.\n  - If the context rejects R_s (for example 192 kHz): decode at 48 kHz for the transport strip only, marked 'browser-resampled'. Moment playback is refused.\n  - A decoded sampleRate other than R_s is refused.\n- Uploads: the kept 22050 Hz mono under up:<runId>, origin 'analysis-rate'. verifyAnalysisSpans recomputes every point's RMS over [512·sf, 512·sf + 3584) with pipeline.ts's exact frameRms order and requires === point.amplitude.\n\nSAMPLE RANGE\n- Span sources: certifiedSpan (payload audioStartSeconds/audioEndSeconds, finite, s < e ≤ durationSeconds); the Upload construction span; devSpans in preview.\n- Never samplingWindowSeconds, never point.id.\n- A = Math.round(s·R) and B = Math.round(e·R), computed independently at the decoded buffer's own rate. At 48 kHz, B − A is 7801 or 7802.\n- The slot is refused, never clamped, if A < 0, B > length, or A ≥ B.\n\nPLAYBACK (audio/engine.ts)\n- One realtime AudioContext, created and resumed inside the click handler.\n- Per play: createBuffer(channels, B − A, rate), copyToChannel(channel.subarray(A, B)) for each channel, then an AudioBufferSourceNode straight to the destination.\n- No fade and no gain change, so the slice is bit-exact (a fade is an owner question and would have to be documented under Exp 012).\n- start(ctx.currentTime + 0.02). Loop repeats the same buffer. 'Play A, then B' leaves a 0.3 s gap.\n- One slot at a time. A slot pauses the audio element, and the audio element's play event stops the slot.\n\nDETAILED WAVEFORM (MomentWaveform, canvas)\n- Full card width × 88 CSS px, backing store at DPR. Background #0a0d16, zero line rgba(255,255,255,.08).\n- One column per device pixel: sliceMinMax over [A + floor(c·N/cols), A + floor((c+1)·N/cols)), drawn as a ≥1 device px vertical bar in the slot colour at 85%. Every sample lands in exactly one column.\n- Fewer than 2 samples per column: a polyline through the samples instead. (0.1625 s at 48 kHz on 460 px at DPR 2 is about 8.5 samples per column.)\n- Shared scale by default: the larger |peak| of A and B; the toggle fits each card to its own peak. Scale label '±{peak}'.\n- Time labels '0 s' and '{(B−A)/R} s' only when the span is certified, or in preview.\n- Multichannel note: 'Picture shows the channels averaged; you hear all channels.'\n- Redrawn only when the slice, width or scale changes.\n\nRED PLAYHEAD\n- A 2 CSS px #ff3b30 div with a 6 px cap, moved by transform: translateX on requestAnimationFrame. The waveform is never redrawn for it.\n- fraction = playheadFraction(heard, startAt, (B − A)/rate, loop).\n- heard = getOutputTimestamp().contextTime + (performance.now() − performanceTime)/1000, falling back to ctx.currentTime − (outputLatency || baseLatency || 0). So it tracks what is heard, not what is scheduled.\n- Hidden when idle. Wraps on loop. The ring of the playing slot pulses.\n- Red is used only for 'now playing', here and in the transport.\n\nWHAT A CARD SHOWS\n- Now (production): values only.\n- Dev preview: the waveform, play and playhead from devSpans, with an UNVERIFIED chip and the pre-Part-A caveat.\n- After Part A (dev): the C05 caveat with V filled; R5 adds codec smearing in ms from the accepted record.\n- Production: also needs A.8 passed for the format group.\n- Upload: the note 'You hear the audio as it was analysed: one channel, resampled to 22.05 kHz by this browser.', shown once uploadListening is open.",
+ "axis_views": "MAPPING\n- X = position[0] = PC1, Y = position[1] = PC2, Z = position[2] = PC3. AXIS_MAPPING {x:0, y:1, z:2}, test-asserted against Exp 011's display.axisMapping.\n- The axis mask is 3 bits and never 0.\n\nONE GEOMETRY\n- Positions are never rewritten. The vertex shaders for points, trail and edges multiply by a binary vec3 uAxisMask that zeroes the dropped axes. It is never animated.\n- viewBasis(mask) gives right, up and back = right × up, all right-handed:\n  - XY: right +X, up +Y, camera on +Z;\n  - XZ: right +X, up +Z, camera on −Y;\n  - YZ: right +Y, up +Z, camera on +X;\n  - 1D: right is the axis.\n- So on screen u = p[h] and v = p[v] exactly, with positive values right and up. projectToView is tested for all 7 views.\n\nUNIFORM SCALE (Exp 008)\n- No jitter, no time axis, no per-axis stretch or recentring. The exporter's single 6/max|score| scale stands.\n- fitOrtho returns ONE world-per-pixel value: the larger extent fills its side minus a 12% margin, and the frame is centred on the extents' midpoint. PC2 and PC3 look thinner, which is correct.\n- A property test checks that display distances = zoom × component distances.\n\n3D: the v0.7 perspective camera and OrbitControls. The pose is saved on leaving 3D and restored on return.\n\n1D/2D\n- OrthographicCamera along −back, with rotation locked (enableRotate false) and autoRotate off.\n- Uniform wheel/pinch zoom and pan (owner question). Fit (F) restores the frame.\n- Dot size uses uOrthoDepth = equivalentOrthoDepth(worldHeight) = worldHeight / (2·tan 26°). Sizes match 3D at the swap and scale with zoom.\n- Draw order: largest first, ties in time order.\n\nTRANSITIONS: every frame shows real data from a real angle; no axis is ever scaled.\n- 3D ↔ 2D: about 700 ms cubic in-out rigid rotation of the perspective camera to or from the target basis. The swap to or from ortho happens at matched scale. The mask change happens only along the view direction, so it is invisible.\n- 2D ↔ 2D: through the same rigid rotation in perspective.\n- Any change involving 1D: a 140 ms cross-fade (uFade plus overlay globalAlpha).\n- prefers-reduced-motion: instant.\n- Picking, the tooltip and labels pause during transitions.\n\nLAYERS\n- Every view: dots, labels, rings, the now-ring.\n- Trail: 2D and 3D, hidden in 1D.\n- E3 lines: xyz only (C23 G7.4). They fade out as a 3D → 2D transition begins. No '3D-derived' label is drawn in flat views.\n- The same 40 label candidates in every view. A dense 1D view shows few numbers, which is expected; density is never relieved by jitter.",
+ "tests": "HARNESS\n- node:test on Node 24.14.1 with native type stripping. No new dependency. Precedent: tools/verify_browser_port_parity.mjs imports pipeline.ts this way.\n- app/test/**/*.test.ts, run by `npm test`. Type-checked through tsconfig.test.json (lib ES2023, no DOM), which is referenced from tsconfig.json, so tsc -b covers it. prebuild runs npm test.\n- Pure modules use explicit .ts imports, no enums, and nothing from react, three, the DOM or import.meta.env. Tests do not import three either: expected colour values are computed from the sRGB formula in the test.\n- Fixtures are synthetic. There is no corpus data.\n\nCASES\n\nreducer / selection\n- A, then B, then B replaced; shift replaces A; re-click removes; indices ≥ n rejected.\n- A new key clears hover, selection and playing, and sets reveal to 'all'.\n- The last axis cannot be turned off. ?view parsing for all 7 values plus garbage.\n- Audio exclusivity. A stale Upload runId is ignored. Preview stays false in a prod store.\n\nnormalize\n- The four shapes are accepted. An array-valued cloud is not unwrapped.\n- Upload unification: sourceSampleRateHz; top-level centroidTrack.\n- contractVersion: missing → 1; 2 accepted; 3 → newer-version; 1.5 or '2' → malformed.\n- Errors: empty points; a 2-number, NaN or Infinity position (with its index); decreasing emissionTime (equal times allowed); a negative or non-finite amplitude.\n- Out-of-range, [a,a] and non-integer edges are dropped and counted; valid edges keep their order.\n- analysisSampleRateHz falls back to sampleRate. colorMaxHz is the point maximum, with a warning when it differs from centroidMaxHz.\n- raw is never mutated (a deep-frozen input does not throw). audioStart/End are kept only when finite.\n\nmanifest.pickInitialDataset: the requested id, then 'sample', then the first entry; an empty list → null.\n\npointSpan\n- certifiedSpan: valid only with both values finite and s < e ≤ duration.\n- toSampleRange: independent rounding; at 48 kHz over sf 0..2000, B − A takes both 7801 and 7802; A < 0, B > length or A ≥ B → null (never clamped).\n- Changing samplingWindowSeconds or the id never changes the output.\n\ndevSpans\n- sf recovered exactly for {0, 1, 7, 12345}.\n- +1e-7 s → unavailable. Missing hop fields → unavailable.\n- Span length 3584/22050.\n\ngates\n- The committed accepted list plus every fixture, forged_v2 included → all hidden with reasons.\n- Each status pending / not-run / suspended / provisional / owner-decision-pending / exploratory / unknown → hidden.\n- sha mismatch, malformed block, or missing approved copy → hidden.\n- Lines: simulated exp009 E3 (k 3, gap 1.5) plus a v1 payload → shown in xyz, hidden in xy ('view-not-3d'); a k mismatch → hidden; non-E3 without approved wording → hidden.\n- viewQuality: deferred → 'not yet measured'; a missing T for one view closes only that view; ev hidden when the view block is hidden (G2a.4) or when G2a.1 fails.\n- momentPlayback hidden for each of: an uncertified span, a transcode, a resampled decode, an unknown ffmpeg sha, a blocked source, a span outside the buffer, and (prod) A.8 missing for the group. Dev with Part A open → shown with the V-filled caveat.\n- uploadListening: a failed or pending self-check → hidden; prod needs approval.\n- A prod build with preview requested never gives 'preview'.\n- The evidence-independent list equals the declared set.\n\nevRule\n- Addition in x, y, z order.\n- Decimal-shift percent: 0.285 → 29, 0.145 → 15.\n- ev > 0 but rounding to 0 → 'under 1%'.\n- Matches Exp 011 C25 examples.\n\naccepted: every non-null record's file exists and its sha matches. Today all records are null and all copy flags false.\n\nformat\n- 1.005 → '1.01'. −2.5 → '−3'. −0 → '0'.\n- 5426.3671875 Hz → '5.43K' and '5.43 kHz'. 11025 → '11.03K'.\n- formatClock(7.43) → '0:07.4'. 20·log10(0.1) → '−20.0'. Amplitude 0 → null.\n- A seeded property test of 10^4 values against Intl.NumberFormat halfExpand.\n\nchannels\n- labelCandidates equals map/sort/slice(0,40) on random fixtures; ties go to the earlier index; n < 40 → n; 0 Hz is not filtered.\n- labelText: amplitude 0 → null.\n- radiusFraction: .035 floor; loudest = 1; ampMax 0 → .035.\n\ncolorRamp\n- The stops equal the hex values.\n- srgbToLinear matches the formula to 1e-7.\n- restingDotDisplayRgb(t) = .874·.9025·lin + .126·bg.\n- legibleEdgeLinear floors the peak channel at .55 and keeps hue.\n\ngeometry\n- viewBasis is right-handed for all 7 views.\n- projectToView: XZ → [p0, p2]; YZ → [p1, p2]; 1D Y → [p1, 0].\n- fitOrtho: one scale; the larger extent fills 88%; a zero extent is safe.\n- equivalentOrthoDepth(12.7185) = 13.0384 ± 1e-3.\n- ballRadiusCss: rf 1 at depth √170 → 42.797 px diameter; dpr 2 gives the same CSS size; the 200 device px clamp; the pulse.\n- labelBox: the drawn box equals the collision box.\n- placeLabels: a 2.9 px gap is hidden and 3.0 px is kept; priority follows order; off-screen or behind-camera labels are hidden and do not block others; buffers are reused.\n- pickPoint: inside a disc; topmost of an overlap; nearest within 6 px; unrevealed excluded.\n- drawOrder: stable. gridLines: step in {1, 2, 5}·10^k with 6-12 lines. currentPointIndex edge cases.\n\ntransition\n- t = 0 and t = 1 give the endpoints.\n- The plan is 'rotate' for 3D/2D pairs and 'fade' for anything with 1D.\n- The mask is binary at every t.\n- Reduced motion → instant.\n\nrevealClock: 'all' → Infinity; ageFactors mirror the shader (pulse at age 0 = 1.6 + 1.3·flux).\n\nshaders: the GLSL contains the constants; matteFragment equals the v0.7 string literal stored in the test.\n\norigin: source-file, transcode and unknown cases; formatGroup covers mp3/mpga/aac/m4a/wav/ogg/flac.\n\nwaveformMath / overview\n- A constant signal → min = max. A spike lands in the right column.\n- Every sample is counted exactly once when N is not divisible by cols. N < 2·cols → line mode.\n- sharedPeak of silence → 1 plus a flag.\n- playheadFraction: before → null; midpoint → .5; after → null; loop wraps; both clock paths agree.\n\nselfCheck: the real pipeline.ts analyzeSamples on a seeded 6 s synthetic 22050 Hz signal passes; a 1-sample shift fails; one altered amplitude fails and names its index.\n\nmeasuredRows\n- Row order and units. Strength = amp/max, with 'under 1%'. Silence → '— (digital silence)'.\n- The bin step comes from frequencyRange, with fallback.\n- Every number equals the formatted payload field.\n\nexports\n- The input is not mutated. The omitted fields are removed. Unknown and v2 fields are kept inside cloud.\n- Simulated production unwrap gives the flat payload with sorted points and identical edges.\n- displaySettings is as specified. Upload id rename follows the pipeline's format.\n\nGUARDS\n- claimText, copyCoverage, notebookVerbatim (reads 03_Research_Notebook, including the C05 template and 007:383).\n- devIsolation, brandIsolation (the OpenGate cast exists only in gates.ts), gatesClosed.\n- @ts-expect-error type tests on the gated components.\n- purity: the pure-module import rules.\n- distLeaks.",
+ "work_packages": [
+  {
+   "id": "WP0",
+   "title": "Foundation: harness, contracts, store, shell, deletions, dist guard (runs first, alone)",
+   "files": [
+    "app/package.json",
+    "app/tsconfig.json",
+    "app/tsconfig.test.json",
+    "app/scripts/check-dist.mjs",
+    "app/scripts/distLeaks.mjs",
+    "app/src/index.css",
+    "app/src/App.tsx (shell; WP11 finishes it)",
+    "app/src/App.module.css",
+    "app/src/devHook.ts (stub exporting null; WP10 owns it afterwards)",
+    "app/src/state/types.ts",
+    "app/src/state/reducer.ts",
+    "app/src/state/selection.ts",
+    "app/src/state/store.ts",
+    "app/src/state/ResourcesContext.tsx",
+    "app/src/data/types.ts",
+    "app/src/evidence/types.ts",
+    "app/src/audio/types.ts",
+    "app/src/cloud/types.ts",
+    "app/src/compare/types.ts",
+    "app/src/copy/define.ts",
+    "mount-point stubs with final prop types, owned later by their packages: cloud/CloudCanvas.tsx, ui/HeaderCard.tsx, ui/ViewBar.tsx, ui/Legend.tsx, ui/Tooltip.tsx, ui/TransportBar.tsx, ui/CenterState.tsx, ui/MoreMenu.tsx, ui/DetailsPanel.tsx, compare/CompareTray.tsx, upload/UploadPanel.tsx",
+    "app/test/fixtures/payloads.ts",
+    "app/test/fixtures/forged_v2.json",
+    "app/test/fixtures/accepted_simulated.ts",
+    "app/test/reducer.test.ts",
+    "app/test/selection.test.ts",
+    "app/test/purity.test.ts",
+    "app/test/distLeaks.test.ts",
+    "DELETE every file in the deletions list"
+   ],
+   "depends_on": [],
+   "acceptance": "1. `cd app; npm run build` exits 0. The prebuild tests pass, tsc -b shows 0 errors (the CloudSceneV2 errors are gone), and check-dist passes.\n2. `npm run lint` reports 0 findings.\n3. `git diff --stat app/src/analysis app/src/types.ts ../tools` is empty.\n4. From the repo root, `npm test` is green, and verify_browser_port_parity on the smoke clip prints PARITY OK. Output goes to a repo or scratchpad folder, never /tmp.\n5. check-dist fails on a hand-made dist folder containing __OWNER_PREVIEW__, and passes on a clean one.\n6. `git grep -e 'sound alike' -e MULTI-SCALE -e '0.15 s' -e 'r = 0.29' app/src` finds only the frozen pipeline.ts comment.\n7. `npm run dev` shows a dark shell with no console errors.\n8. Nothing is committed."
+  },
+  {
+   "id": "WP1",
+   "title": "Data layer",
+   "files": [
+    "app/src/data/normalize.ts",
+    "app/src/data/manifest.ts",
+    "app/src/data/useDatasets.ts",
+    "app/src/data/pointSpan.ts",
+    "app/test/normalize.test.ts",
+    "app/test/manifest.test.ts",
+    "app/test/pointSpan.test.ts"
+   ],
+   "depends_on": [
+    "WP0"
+   ],
+   "acceptance": "1. build, lint and test pass, with every normalize, manifest and pointSpan case, and all four payload shapes.\n2. Publish the smoke dataset: `node tools/generate_acoustic_assets.js Assets/smoke/Luscinia_svecica_song.ogg --id=smoke_bluethroat --species=Bluethroat --label=\"Smoke - Bluethroat\" --no-birdnet --publish`.\n3. Open ?dataset=smoke_bluethroat. The store is ready with 234 dots, 540 edges and 0 dropped edges.\n4. A hand-edited copy with swapped emissionTimes shows its exact error reason."
+  },
+  {
+   "id": "WP2",
+   "title": "Evidence gates, acceptance lock, ev rule, number formatting, gated copy, guards",
+   "files": [
+    "app/src/evidence/accepted.ts",
+    "app/src/evidence/blocks.ts",
+    "app/src/evidence/gates.ts",
+    "app/src/evidence/evRule.ts",
+    "app/src/evidence/useGates.ts",
+    "app/src/format/number.ts",
+    "app/src/copy/gated.ts",
+    "app/test/gates.test.ts",
+    "app/test/accepted.test.ts",
+    "app/test/evRule.test.ts",
+    "app/test/format.test.ts",
+    "app/test/guards/claimText.test.ts",
+    "app/test/guards/copyCoverage.test.ts",
+    "app/test/guards/notebookVerbatim.test.ts",
+    "app/test/guards/devIsolation.test.ts",
+    "app/test/guards/brandIsolation.test.ts",
+    "app/test/guards/gatesClosed.test.ts"
+   ],
+   "depends_on": [
+    "WP0"
+   ],
+   "acceptance": "1. build, lint and test pass.\n2. ACCEPTED_EVIDENCE is all null and APPROVED_COPY all false.\n3. gatesClosed passes, forged_v2 included.\n4. copy/gated.ts holds only pre-committed texts, each citing its notebook line, and notebookVerbatim passes against the CURRENT, amended notebooks: the Exp 012 C05 template, Exp 007:383 and the Exp 008 labels.\n5. A reviewer confirms that no threshold or verdict is computed in the viewer, and that every GateReason maps to a notebook rule or a runtime condition."
+  },
+  {
+   "id": "WP3",
+   "title": "Cloud maths (pure)",
+   "files": [
+    "app/src/cloud/constants.ts",
+    "app/src/cloud/channels.ts",
+    "app/src/cloud/colorRamp.ts",
+    "app/src/cloud/geometry.ts",
+    "app/src/cloud/transition.ts",
+    "app/src/cloud/revealClock.ts",
+    "app/test/channels.test.ts",
+    "app/test/colorRamp.test.ts",
+    "app/test/geometry.test.ts",
+    "app/test/transition.test.ts",
+    "app/test/revealClock.test.ts"
+   ],
+   "depends_on": [
+    "WP0"
+   ],
+   "acceptance": "1. build, lint and test pass.\n2. A test asserts that the constants equal git HEAD's v0.7 values: LABEL_COUNT 40, SIZE_SCALE 62, MIN_RADIUS_FRACTION .035, REVEAL .28, RECENT .7, TRAIL 1.5, label 13 px, gap 3 px, and the Matte style entry.\n3. The purity test passes: no react, three or DOM."
+  },
+  {
+   "id": "WP4",
+   "title": "Cloud rendering: shaders, points, trail, edges, cameras and transitions, grid, gizmo, screen layer, picking, capture",
+   "files": [
+    "app/src/cloud/matteShader.ts",
+    "app/src/cloud/CloudCanvas.tsx",
+    "app/src/cloud/CloudPoints.tsx",
+    "app/src/cloud/TrailLine.tsx",
+    "app/src/cloud/EdgeLines.tsx",
+    "app/src/cloud/CameraRig.tsx",
+    "app/src/cloud/FlatGrid.tsx",
+    "app/src/cloud/AxisGizmo.tsx",
+    "app/src/cloud/screenFrame.ts",
+    "app/src/cloud/ScreenLayer.tsx",
+    "app/src/cloud/capture.ts",
+    "app/src/cloud/Cloud.module.css",
+    "app/src/copy/cloud.ts",
+    "app/test/shaders.test.ts"
+   ],
+   "depends_on": [
+    "WP0",
+    "WP1",
+    "WP2",
+    "WP3"
+   ],
+   "acceptance": "build, lint and test pass. No per-frame React state and no per-frame allocation.\n\nBrowser check on smoke_bluethroat, inat_196765 (WAV) and inat_52349 (51 s):\n(a) At rest the whole Matte cloud shows with no core glow. Up to 40 'x.xxK' numbers, and the diagnostics count 0 overlaps while orbiting and zooming close.\n(b) audio.play() from devtools clears the cloud and reveals it in time. The ring sits on the newest dot, and no number is ever covered by its swelling dot.\n(c) Each ?view= gives a square grid, ± marks, dots at raw positions (spot-check 3 dots in devtools), no lines and locked rotation.\n(d) 3D↔2D rotates rigidly with no size jump at the swap. 1D cross-fades.\n(e) ?preview in dev: E3 lines only in xyz. Without it, no lines.\n(f) A hover or click hits only revealed dots, and the A/B rings draw.\n(g) A DPR change keeps sizes.\n(h) Near dots draw on top.\n(i) 60 fps at 700 points."
+  },
+  {
+   "id": "WP5",
+   "title": "Audio engine and compare maths",
+   "files": [
+    "app/src/audio/origin.ts",
+    "app/src/audio/overview.ts",
+    "app/src/audio/selfCheck.ts",
+    "app/src/audio/decodeClip.ts",
+    "app/src/audio/clipStore.ts",
+    "app/src/audio/useClip.ts",
+    "app/src/audio/engine.ts",
+    "app/src/compare/measuredRows.ts",
+    "app/src/compare/waveformMath.ts",
+    "app/test/origin.test.ts",
+    "app/test/overview.test.ts",
+    "app/test/selfCheck.test.ts",
+    "app/test/measuredRows.test.ts",
+    "app/test/waveformMath.test.ts"
+   ],
+   "depends_on": [
+    "WP0",
+    "WP1",
+    "WP2"
+   ],
+   "acceptance": "1. build, lint and test pass. selfCheck runs against the real analyzeSamples, including the 1-sample-shift failure.\n2. The only decode path is OfflineAudioContext at source.sampleRateHz; grep finds no realtime-context decode.\n3. Out-of-buffer ranges are refused, not clamped.\n4. On smoke_bluethroat the clip becomes ready with decoded rate = source rate and origin source-file.\n5. engine.playRange from devtools plays an exact slice and pauses the audio element."
+  },
+  {
+   "id": "WP6",
+   "title": "Compare UI: tray, slot cards, detailed waveform with red playhead, linked moments",
+   "files": [
+    "app/src/compare/CompareTray.tsx",
+    "app/src/compare/SlotCard.tsx",
+    "app/src/compare/MomentWaveform.tsx",
+    "app/src/compare/Compare.module.css",
+    "app/src/copy/compare.ts",
+    "app/test/compareGateTypes.test.ts"
+   ],
+   "depends_on": [
+    "WP2",
+    "WP4",
+    "WP5"
+   ],
+   "acceptance": "build, lint and test pass (@ts-expect-error: the audio area needs an OpenGate).\n\nBrowser:\n(a) Visitor view: two aligned value cards and the footnote. No waveform, no play button, no placeholder.\n(b) Dev ?preview:\n- an UNVERIFIED chip and caveat, and a waveform that shows sample structure when zoomed in;\n- Play: the red playhead crosses the card once in the slice duration and stops when the sound stops;\n- Loop is seamless, and 'Play A, then B' works;\n- slot and main playback exclude each other;\n- the shared-scale toggle works;\n- linked moments appear in xyz only.\n(c) Keys 1, 2, L and Esc work.\n(d) Under 700 px the tray becomes a bottom sheet."
+  },
+  {
+   "id": "WP7",
+   "title": "Screen chrome: header, menu, view bar, key, tooltip, transport, centre states, help, details, gated readouts, keyboard",
+   "files": [
+    "app/src/ui/HeaderCard.tsx",
+    "app/src/ui/DatasetMenu.tsx",
+    "app/src/ui/ViewBar.tsx",
+    "app/src/ui/ViewQualityLine.tsx",
+    "app/src/ui/AxisCaptions.tsx",
+    "app/src/ui/AxisLoadings.tsx",
+    "app/src/ui/Legend.tsx",
+    "app/src/ui/Tooltip.tsx",
+    "app/src/ui/TransportBar.tsx",
+    "app/src/ui/CenterState.tsx",
+    "app/src/ui/HelpPopover.tsx",
+    "app/src/ui/MoreMenu.tsx",
+    "app/src/ui/DetailsPanel.tsx",
+    "app/src/ui/useKeyboard.ts",
+    "app/src/ui/Ui.module.css",
+    "app/src/copy/ui.ts",
+    "app/test/uiGateTypes.test.ts"
+   ],
+   "depends_on": [
+    "WP2",
+    "WP3",
+    "WP5"
+   ],
+   "acceptance": "build, lint and test pass, including the copy guards.\n\nBrowser:\n(a) Header and menu, with the Upload entry.\n(b) Chips switch views, the last-axis hint shows, and the keys work.\n(c) The key's gradient matches a pixel of a resting dot. Size text changes with the view. Playback rows appear only while playing. No lines row.\n(d) Tooltip rows are exact and hidden during transitions.\n(e) Transport: play, pause and seek; the strip appears after decode; the red playhead matches by ear on a clear onset.\n(f) Every centre state renders with its exact text.\n(g) ViewQualityLine, AxisCaptions, AxisLoadings and the description section render nothing on v1 payloads."
+  },
+  {
+   "id": "WP8",
+   "title": "Upload into the same scene",
+   "files": [
+    "app/src/upload/useUploadRun.ts",
+    "app/src/upload/UploadPanel.tsx",
+    "app/src/upload/Upload.module.css",
+    "app/src/copy/upload.ts"
+   ],
+   "depends_on": [
+    "WP1",
+    "WP2",
+    "WP5"
+   ],
+   "acceptance": "1. build, lint and test pass. `git diff --stat app/src/analysis` is empty.\n2. Uploading inat_196765.wav and then the smoke OGG: each renders in the SAME canvas with the pruned facts (no PCA variance, no 0.15 s, no '~1%').\n3. clipStore holds up:<runId> with the full-length 22050 Hz samples, so the buffer was not detached.\n4. The dev self-check shows n of n dots matching exactly.\n5. A second upload during the first shows only the second result.\n6. The downloaded JSON equals the old UploadMode output after normalising generatedAt."
+  },
+  {
+   "id": "WP9",
+   "title": "Exports",
+   "files": [
+    "app/src/export/viewExport.ts",
+    "app/src/export/uploadExport.ts",
+    "app/src/export/download.ts",
+    "app/test/viewExport.test.ts",
+    "app/test/uploadExport.test.ts"
+   ],
+   "depends_on": [
+    "WP0"
+   ],
+   "acceptance": "build, lint and test pass, including production-unwrap equivalence. After WP11, a downloaded view JSON loads back through toCloudRecording with identical points and edges, and the PNG contains the dots and the numbers."
+  },
+  {
+   "id": "WP10",
+   "title": "Owner panel, preview, dev spans",
+   "files": [
+    "app/src/devHook.ts",
+    "app/src/dev/preview.ts",
+    "app/src/dev/devSpans.ts",
+    "app/src/dev/devCopy.ts",
+    "app/src/dev/OwnerPanel.tsx",
+    "app/src/dev/Dev.module.css",
+    "app/test/devSpans.test.ts"
+   ],
+   "depends_on": [
+    "WP0",
+    "WP2"
+   ],
+   "acceptance": "1. build, lint and test pass.\n2. After `npm run build`, dist contains no sentinel, no dev words and no OwnerPanel chunk. Temporarily importing dev/OwnerPanel.tsx unguarded makes the build fail; revert afterwards.\n3. `npm run preview` with ?preview shows nothing extra.\n4. In dev, the panel lists every feature as closed with plain reasons, and the preview switch adds the frame, the banner and the chips.\n5. Simulated evidence renders the gated components with the watermark."
+  },
+  {
+   "id": "WP11",
+   "title": "Integration, polish, README, full walkthrough",
+   "files": [
+    "app/src/App.tsx",
+    "app/src/App.module.css",
+    "app/src/index.css",
+    "app/README.md"
+   ],
+   "depends_on": [
+    "WP1",
+    "WP2",
+    "WP3",
+    "WP4",
+    "WP5",
+    "WP6",
+    "WP7",
+    "WP8",
+    "WP9",
+    "WP10"
+   ],
+   "acceptance": "1. In app/: build, lint and test are green. At the root: npm test and PARITY OK.\n2. Walkthrough on smoke_bluethroat, inat_196765, inat_366234 (MP3), inat_52349 and one Upload:\n- rest, play, pause, seek, end;\n- all 7 views and their transitions;\n- hover, A/B, and preview compare;\n- key accuracy, downloads, recording switch, resize and DPR change;\n- reduced motion, keyboard only, and 375 px width.\n3. The production preview shows no gated element on any dataset.\n4. The README documents npm test, ?dataset=, ?view= and ?preview (dev only).\n5. A plain-language note for the owner lists what is visible now and what is hidden, and why."
+  },
+  {
+   "id": "WP12",
+   "title": "Dated documentation amendments (only after owner approval, and after the running notebook-amendment workflow has landed)",
+   "files": [
+    "06_Technical_Architecture/Technical_Architecture.md",
+    "HANDOFF_v2.md",
+    "03_Research_Notebook/Experiment_011_Description_Claims_Audit.md (dated pointer note only)"
+   ],
+   "depends_on": [
+    "WP11"
+   ],
+   "acceptance": "1. Technical_Architecture.md gets a dated amendment: renderer versions are retired except v0.7, git history is the archive, the label rule now lives in cloud/channels.ts (unchanged), and the gating mechanism is described.\n2. HANDOFF_v2.md: Phase 5 status, and viewQuality renamed to viewPreservation.\n3. The Exp 011 note is added only through the dated amendment mechanism, before that experiment's freeze. It covers the pointer to the new file, and the sizeScaleFrom text, which says amplitudeNorm while the viewer sizes by amplitude/max.\n4. Nothing is committed without the owner's go-ahead."
+  }
+ ],
+ "open_questions_for_owner": [
+  "Before play and after the end, show the whole cloud with its up to 40 numbers, and have Play clear it and reveal it again in time with the sound? Today the screen is empty until the audio plays.",
+  "Colour key: the dots are drawn darker than the key shows, because of a colour-space detail in the shader. Production has the same mismatch. Recommended: keep the dots exactly as they look and redraw the key to match them. The alternative is to brighten the dots, which changes the canonical look.",
+  "Numbers: draw them on a flat overlay layer, with the same font, colours and 13 px height, but sharper and never hidden under their own dot? And keep two decimals ('5.43K')? The frequency steps are 21.5 Hz, so the second decimal looks more precise than the measurement.",
+  "Remove the blue centre glow and the moving comet? The comet passes through positions that were never measured. It would be replaced by a thin ring on the dot that started most recently.",
+  "In 3D, near dots would be drawn on top of far ones. That is more accurate, but it looks slightly different from production, which draws dots in time order. OK?",
+  "Changing views: turn the real 3D cloud to face the new view, and cross-fade whenever the single-line view is involved? Nothing is ever squashed or stretched part-way. Or should switching be instant?",
+  "Flat views: rotation is locked. Allow even zoom and slide, with a Fit button?",
+  "Shrink dots on short screens the way production does (screen height / 640)? Default: no, which keeps the v0.7 look.",
+  "Full-recording waveform with the red playhead in the bottom bar: show it to visitors now? It draws the file's own sound. Nobody has checked yet that the line matches what you hear to the millisecond for MP3 files.",
+  "Until Experiment 012 passes, production compare shows only the two dots' values. Keep it that way, or hide compare entirely?",
+  "Uploaded files: count the automatic exact-match check (every dot's loudness re-measured from the analysed audio) as enough evidence to let visitors hear a moment? This would need a short dated notebook entry.",
+  "Should compare playback add 3 ms fades at each end to avoid clicks? The default is none, so you hear exactly the slice. A fade would have to be documented under Experiment 012.",
+  "When Experiment 009 approves the lines: start with them on or off?",
+  "This viewer shows 40 numbers, production shows 15. Is the difference fine?",
+  "Approve a dated amendment to Technical_Architecture.md for deleting the old renderer versions (git keeps them)? Also a dated Experiment 011 pointer note for the moved label rule, and a correction of its sizeScaleFrom text.",
+  "Phase 4 payload additions: sourceSha256, the ffmpeg build that made the file (version, binary sha256, platform), and a credit/licence block matched by sha256. These let the viewer enforce your decision 5 and show credits. Separately, a legal question: must files made from the 3 CC BY-SA recordings also be shared alike?",
+  "The title: keep 'Bird Song Acoustic Manifold', or use a neutral wordmark such as 'ACOUSTIC CLOUD'? 'Manifold' suggests a structure the experiments have not shown yet.",
+  "Frozen pipeline.ts writes '0.15s window' and 'sound alike' into the upload export's pipeline text and a code comment. Fix these in the Phase 4 edit, together with the exporter?"
+ ]
+}

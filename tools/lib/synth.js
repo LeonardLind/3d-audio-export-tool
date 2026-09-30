@@ -27,8 +27,8 @@
 //     power over the samples inside segments and P_background the mean background power
 //     over the whole file. snrDb = null (or Infinity) adds no background. The background
 //     uses its own random stream, so changing snrDb never changes the signal itself.
-//   - Determinism: same params -> bit-identical output (mulberry32 PRNG + Box-Muller; no
-//     Math.random, no time dependence).
+//   - Determinism: same params -> bit-identical output. Legacy calls use mulberry32;
+//     rng: "philox" uses C01's keyed streams and cosine-only Box-Muller normals.
 //
 // Nothing in this file is a claim about birds. The motif shapes in motifSequence are
 // simplified caricatures of common passerine note types (whistle, trill, buzz, two-note,
@@ -41,6 +41,7 @@ const DEFAULTS = {
   sampleRate: 22050,
   rms: 0.1,
 };
+const { createStream } = require("./rng");
 
 // --- random numbers ---------------------------------------------------------------------
 
@@ -77,6 +78,25 @@ function makeRng(seed) {
     gaussian,
     range: (lo, hi) => lo + (hi - lo) * uniform(),
   };
+}
+
+// C01's v2 stream: one cosine-branch normal consumes exactly two uniforms.
+// Exported so Experiment 012's click jitter can use key (seed, 0) directly.
+function makePhiloxRng(seed, subStream = 0) {
+  const stream = createStream(seed, subStream);
+  return {
+    uniform: () => stream.nextUniform(),
+    gaussian: () => stream.nextNormal(),
+    range: (lo, hi) => stream.nextRange(lo, hi),
+  };
+}
+
+function signalRng(params) {
+  return params.rng === "philox" ? makePhiloxRng(params.seed, 0) : makeRng(streamSeed(params.seed, STREAM_SIGNAL));
+}
+
+function backgroundRng(params) {
+  return params.rng === "philox" ? makePhiloxRng(params.seed, 1) : makeRng(streamSeed(params.seed, STREAM_BACKGROUND));
 }
 
 // Independent streams from one user seed (signal jitter vs background noise).
@@ -208,6 +228,10 @@ function dbToGain(db) {
 }
 
 function resolveCommon(options, extraDefaults) {
+  if (options.rng !== undefined && options.rng !== "philox") throw new Error(`synth: unsupported rng ${options.rng}`);
+  if (options.rng === "philox" && (!Number.isInteger(options.seed) || options.seed < 0 || options.seed > 0xffffffff)) {
+    throw new Error("synth: v2 requires an explicit uint32 seed");
+  }
   const given = Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
   const params = { ...DEFAULTS, ...extraDefaults, ...given };
   if (!Number.isInteger(params.seed)) throw new Error(`seed must be an integer, got ${params.seed}`);
@@ -275,7 +299,7 @@ function finish(clean64, params, segments, { backgroundApplicable = true } = {})
   let backgroundRms = 0;
   const addBackground = backgroundApplicable && params.snrDb !== null && params.snrDb !== Infinity;
   if (addBackground && signalPower > 0) {
-    const rng = makeRng(streamSeed(params.seed, STREAM_BACKGROUND));
+    const rng = backgroundRng(params);
     for (let i = 0; i < n; i += 1) background[i] = rng.gaussian();
     backgroundRms = Math.sqrt(signalPower / 10 ** (params.snrDb / 10));
     scaleToRms(background, backgroundRms);
@@ -309,7 +333,7 @@ function alternation(params, states, makeBurst) {
   const { sampleRate, durationSeconds, toneSeconds, gapSeconds, leadSeconds, rampSeconds } = params;
   const total = Math.round(durationSeconds * sampleRate);
   const clean = new Float64Array(total);
-  const rng = makeRng(streamSeed(params.seed, STREAM_SIGNAL));
+  const rng = signalRng(params);
   const burstSamples = Math.round(toneSeconds * sampleRate);
   const rampSamples = Math.round(rampSeconds * sampleRate);
 
@@ -528,7 +552,7 @@ function motifSequence(options = {}) {
   const { sampleRate, durationSeconds } = params;
   const total = Math.round(durationSeconds * sampleRate);
   const clean = new Float64Array(total);
-  const rng = makeRng(streamSeed(params.seed, STREAM_SIGNAL));
+  const rng = signalRng(params);
   const rampSamples = Math.round(params.rampSeconds * sampleRate);
 
   const segments = [];
@@ -567,7 +591,7 @@ function motifSequence(options = {}) {
 function stationaryNoise(options, generator, weightFactory) {
   const params = resolveCommon(options, { generator, property: "none", minHz: 20 });
   const total = Math.round(params.durationSeconds * params.sampleRate);
-  const rng = makeRng(streamSeed(params.seed, STREAM_SIGNAL));
+  const rng = signalRng(params);
   const noise = shapedNoise(rng, total, params.sampleRate, weightFactory(params));
   scaleToRms(noise, params.rms);
   const segments = [{ start: 0, end: total / params.sampleRate, startSample: 0, lengthSamples: total, label: generator === "whiteNoise" ? "white" : "pink", property: "none", value: null, targetRms: params.rms }];
@@ -598,7 +622,7 @@ function clickTrain(options = {}) {
   const { sampleRate, durationSeconds } = params;
   const total = Math.round(durationSeconds * sampleRate);
   const clean = new Float64Array(total);
-  const rng = makeRng(streamSeed(params.seed, STREAM_SIGNAL));
+  const rng = signalRng(params);
   const length = Math.max(2, Math.round(params.clickSeconds * sampleRate));
   let times = params.times;
   if (!times) {
@@ -651,6 +675,7 @@ module.exports = {
   DEFAULTS,
   mulberry32,
   makeRng,
+  makePhiloxRng,
   rmsOf,
   shapedNoise,
 };

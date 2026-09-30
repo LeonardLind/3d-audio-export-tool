@@ -139,6 +139,8 @@ Demo: 1 × CC BY 3.0 and 1 × CC BY-SA 3.0.
 - **Size:** 77,468,326 bytes of evidence audio plus 412,076 bytes of demo audio, 77,880,402 bytes in total (77.9 MB). The largest file is 13,831,584 bytes.
 - **Tool versions:** ffmpeg `6.0` (ffmpeg-static) and ffprobe `n4.4.1` (@ffprobe-installer). These are **different versions**, and both are recorded in the manifest.
 
+**Note (2026-09-29, pre-run consistency amendments to Experiments 007–012):** these are the versions on the machine that built the manifest. By owner decision OD-5 (Leonard Lind, project owner, 2026-09-29, working session), Experiment 012 Part A certifies the exact binary it runs on; the approved reference machine is a Windows PC on which the same ffmpeg-static package resolves to "ffmpeg version 6.1.1-essentials_build-www.gyan.dev" (win32-x64), with ffprobe from @ffprobe-installer/win32-x64. So the npm package does not pin the decoder version across platforms. Every v2 runner must log its ffmpeg/ffprobe version strings and binary SHA-256, and each experiment's freeze must record them (Amendment C02); where a runner uses `decodedSamples22050` it must re-derive it on its own binary and log any difference as a deviation. The manifest itself is the corpus of record and is not rewritten. On that PC, checked 2026-09-29, ffprobe reports "ffprobe version 2023-02-13-git-2296078397-essentials_build-www.gyan.dev", so ffprobe also differs from the manifest's `n4.4.1`.
+
 ## Known biases and limits
 
 1. **Citizen-science recordings.**

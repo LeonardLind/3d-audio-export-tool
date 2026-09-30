@@ -48,7 +48,7 @@ p.colorT)))
 p.spectralCentroidHz)
 PCA
 point.rawFeature)
-{const
+[{]const
 app/(a.timestampMs
 app/PCA
-app/{const
+app/[{]const

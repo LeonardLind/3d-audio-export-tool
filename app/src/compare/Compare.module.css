@@ -1,0 +1,28 @@
+.tray { width: min(850px, calc(100vw - 32px)); padding: 14px; background: rgba(10, 11, 16, .89); border: 1px solid #232838; border-radius: 10px; color: #e6ebf4; box-shadow: 0 12px 30px #0008; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { min-width: 0; padding: 12px; border: 1px solid #2b3446; border-radius: 8px; background: #0b0e16; }
+.cardPlaying { border-color: #ff3b30; animation: cardPulse 1.2s ease-in-out infinite alternate; }
+@keyframes cardPulse { to { box-shadow: 0 0 12px #ff3b3044; } }
+.cardTitle { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.slotBadge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid currentColor; border-radius: 50%; }
+.rows { margin: 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 4px 0; font-size: 12px; border-top: 1px solid #1d2533; }
+.row dt { color: #9aa6b9; }
+.row dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.audioArea { margin-top: 12px; }
+.waveformBlock { width: 100%; }
+.waveformFrame { position: relative; width: 100%; height: 88px; overflow: hidden; background: #0a0d16; border: 1px solid #263047; border-radius: 4px; }
+.waveform { display: block; width: 100%; height: 88px; }
+.playhead { position: absolute; display: none; left: 0; top: 0; width: 2px; height: 100%; background: #ff3b30; will-change: transform; }
+.playhead::before { content: ''; position: absolute; left: -2px; top: 0; width: 6px; height: 6px; border-radius: 0 0 3px 3px; background: #ff3b30; }
+.waveformScale { display: flex; justify-content: space-between; color: #9aa6b9; font-size: 10px; font-variant-numeric: tabular-nums; }
+.cardControls, .sharedControls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tray button { padding: 6px 10px; border: 1px solid #465268; border-radius: 5px; background: #172032; color: inherit; cursor: pointer; }
+.tray button:hover { background: #22304a; }
+.tray button:focus-visible, .tray input:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+.sharedControls label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.notice { margin: 10px 0 0; padding: 8px; border-left: 2px solid #ffbf69; color: #f0d5ab; font-size: 12px; }
+.linked { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; font-size: 12px; }
+.footnote { margin: 10px 0 0; color: #9aa6b9; font-size: 11px; }
+@media (max-width: 700px) { .tray { width: 100%; max-height: 50vh; overflow-y: auto; border-radius: 12px 12px 0 0; padding: 9px; } .cards { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .cardPlaying { animation: none; } }

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "prebuild": "npm test",
+    "build": "tsc -b && vite build && node scripts/check-dist.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

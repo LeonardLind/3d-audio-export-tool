@@ -1,0 +1,8 @@
+.panel { position: absolute; right: 1rem; top: 4rem; z-index: 30; max-width: 20rem; padding: .65rem; color: #e9ecf4; background: rgba(10, 11, 16, .85); border: 1px solid #232838; border-radius: 10px; font: 13px system-ui, sans-serif; }
+.panel button { color: inherit; background: #252b3b; border: 1px solid #56617c; border-radius: 6px; padding: .4rem .65rem; cursor: pointer; }
+.panel p { margin: .5rem 0; }
+.panel summary { cursor: pointer; margin-top: .6rem; }
+.hiddenInput { display: none; }
+.details { display: grid; gap: .45rem; max-height: 55vh; overflow: auto; }
+.details label { display: grid; gap: .2rem; }
+.details input { min-width: 0; padding: .35rem; color: inherit; background: #101520; border: 1px solid #56617c; border-radius: 5px; }
